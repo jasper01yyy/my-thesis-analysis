@@ -1,0 +1,3432 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ResearchMate - 대학원생 논문 연구 및 작성 관리 시스템</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Chart.js for 7-day writing graph -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Firebase App & Realtime Database SDKs (Compat version for clean single-file browser usage) -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@300;400;500;600;700&display=swap');
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, 'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', sans-serif;
+      background-color: #f8fafc;
+      color: #1e293b;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+  </style>
+</head>
+<body class="min-h-screen bg-slate-50 text-slate-800 antialiased flex flex-col">
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Confirmation Modal -->
+  <div id="confirmModal" class="fixed inset-0 z-50 hidden bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl max-w-sm w-full p-6 border border-slate-200">
+      <div class="w-10 h-10 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
+        <i data-lucide="alert-triangle" class="w-5 h-5"></i>
+      </div>
+      <h3 id="confirmTitle" class="text-lg font-bold text-slate-900 mb-2">삭제 확인</h3>
+      <p id="confirmMessage" class="text-sm text-slate-600 mb-6">정말로 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.</p>
+      <div class="flex justify-end gap-3">
+        <button id="confirmCancelBtn" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition">취소</button>
+        <button id="confirmActionBtn" class="px-4 py-2 text-sm font-medium text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-xs transition">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LOGIN SCREEN -->
+  <div id="loginScreen" class="min-h-screen flex flex-col items-center justify-center px-4 py-12 bg-slate-50">
+    <div class="max-w-md w-full bg-white rounded-2xl shadow-sm border border-slate-200/80 p-8 sm:p-10">
+      <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-900 text-white mb-4 shadow-sm">
+          <i data-lucide="graduation-cap" class="w-8 h-8"></i>
+        </div>
+        <h1 class="text-2xl font-bold tracking-tight text-slate-900">ResearchMate</h1>
+        <p class="text-xs font-medium text-slate-500 mt-1 uppercase tracking-wider">대학원생 논문 연구 및 작성 관리 시스템</p>
+      </div>
+
+      <form id="loginForm" class="space-y-5">
+        <div>
+          <label for="loginUsername" class="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
+            사용자 이름 (연구자명) <span class="text-rose-500">*</span>
+          </label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+              <i data-lucide="user" class="w-4 h-4"></i>
+            </span>
+            <input 
+              type="text" 
+              id="loginUsername" 
+              required
+              placeholder="예: 홍길동 또는 gildong" 
+              class="w-full pl-10 pr-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 focus:bg-white transition"
+            >
+          </div>
+          <p class="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+            * 입력하신 이름을 기준으로 논문 연구 데이터가 분리되어 실시간 동기화/보관됩니다.
+          </p>
+        </div>
+
+        <button 
+          type="submit" 
+          class="w-full py-3 px-4 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg shadow-xs transition duration-150 flex items-center justify-center gap-2 cursor-pointer"
+        >
+          <span>시스템 시작하기</span>
+          <i data-lucide="arrow-right" class="w-4 h-4"></i>
+        </button>
+      </form>
+
+      <!-- Storage & Firebase info notice -->
+      <div id="firebaseNoticeBox" class="mt-8 pt-6 border-t border-slate-100 text-xs text-slate-500 space-y-2">
+        <div class="flex items-start gap-2">
+          <i data-lucide="database" class="w-4 h-4 text-slate-400 mt-0.5 shrink-0"></i>
+          <div>
+            <span id="backendStatusTag" class="font-medium text-slate-700">Firebase 실시간 동기화 지원</span>
+            <p class="text-[11px] text-slate-400 mt-0.5">Firebase 미설정 시 브라우저 LocalStorage로 안전하게 자동 동작하며, 설정 입력 시 Firebase DB와 즉시 연동됩니다.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN APP WRAPPER (Initially Hidden) -->
+  <div id="appContainer" class="hidden min-h-screen flex flex-col bg-slate-50">
+    
+    <!-- Top Navigation Bar -->
+    <header class="sticky top-0 z-30 bg-white border-b border-slate-200 h-16 flex items-center justify-between px-4 sm:px-6">
+      <div class="flex items-center gap-3">
+        <!-- Mobile menu hamburger -->
+        <button id="mobileMenuBtn" class="md:hidden p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg">
+          <i data-lucide="menu" class="w-5 h-5"></i>
+        </button>
+
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-slate-900 text-white flex items-center justify-center">
+            <i data-lucide="book-marked" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="text-base font-bold text-slate-900 leading-none">ResearchMate</span>
+              <span class="hidden sm:inline-block text-[11px] px-2 py-0.5 bg-slate-100 text-slate-600 rounded font-medium border border-slate-200">대학원 연구관리</span>
+            </div>
+            <p class="hidden sm:block text-[11px] text-slate-500 mt-0.5">대학원생 논문 연구 및 작성 관리 시스템</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Header: User info & logout -->
+      <div class="flex items-center gap-3 sm:gap-4">
+        <!-- Submission Countdown Chip -->
+        <div id="headerCountdownChip" class="hidden sm:flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-full text-xs font-semibold">
+          <i data-lucide="clock" class="w-3.5 h-3.5 text-amber-600"></i>
+          <span id="headerCountdownText">제출일 미정</span>
+        </div>
+
+        <!-- User profile badge -->
+        <div class="flex items-center gap-2 pl-2 sm:border-l sm:border-slate-200">
+          <div class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center text-xs font-bold">
+            <span id="userInitial">研</span>
+          </div>
+          <div class="hidden md:block text-left">
+            <span id="currentUserName" class="block text-xs font-bold text-slate-800 leading-tight">연구자</span>
+            <span class="block text-[10px] text-slate-400">연구자 계정</span>
+          </div>
+        </div>
+
+        <button 
+          id="logoutBtn" 
+          title="로그아웃" 
+          class="p-2 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+        >
+          <i data-lucide="log-out" class="w-4 h-4"></i>
+        </button>
+      </div>
+    </header>
+
+    <div class="flex-1 flex overflow-hidden">
+      <!-- SIDEBAR -->
+      <aside 
+        id="sidebar" 
+        class="fixed md:static inset-y-0 left-0 z-40 w-64 bg-white border-r border-slate-200 flex flex-col transition-transform duration-200 ease-in-out -translate-x-full md:translate-x-0 pt-16 md:pt-0"
+      >
+        <div class="p-4 flex-1 overflow-y-auto custom-scrollbar space-y-1">
+          <div class="px-3 py-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">메인 메뉴</div>
+          
+          <button data-target="dashboard" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition active">
+            <i data-lucide="layout-dashboard" class="w-4 h-4 text-slate-500"></i>
+            <span>Dashboard</span>
+          </button>
+
+          <button data-target="plan" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition">
+            <i data-lucide="compass" class="w-4 h-4 text-slate-500"></i>
+            <span>연구계획</span>
+          </button>
+
+          <button data-target="references" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition">
+            <i data-lucide="library" class="w-4 h-4 text-slate-500"></i>
+            <span>문헌 관리</span>
+          </button>
+
+          <button data-target="chapters" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition">
+            <i data-lucide="git-branch" class="w-4 h-4 text-slate-500"></i>
+            <span>논문 진행</span>
+          </button>
+
+          <button data-target="writingLogs" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition">
+            <i data-lucide="edit-3" class="w-4 h-4 text-slate-500"></i>
+            <span>작성 기록</span>
+          </button>
+
+          <button data-target="tasks" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition">
+            <i data-lucide="calendar-check" class="w-4 h-4 text-slate-500"></i>
+            <span>연구 일정 / 할 일</span>
+          </button>
+
+          <div class="pt-4 px-3 py-2 text-[11px] font-bold text-slate-400 uppercase tracking-wider">추가 도구</div>
+
+          <button data-target="notes" class="nav-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-700 hover:bg-slate-100 transition">
+            <i data-lucide="sticky-note" class="w-4 h-4 text-slate-500"></i>
+            <span>연구 메모장</span>
+          </button>
+        </div>
+
+        <!-- Sidebar footer: quick summary -->
+        <div class="p-4 border-t border-slate-200 bg-slate-50/70">
+          <div class="flex items-center justify-between text-xs text-slate-600 mb-1.5">
+            <span>논문 전체 진행률</span>
+            <span id="sidebarProgressText" class="font-bold text-slate-900">0%</span>
+          </div>
+          <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+            <div id="sidebarProgressBar" class="bg-slate-900 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+          <p class="text-[10px] text-slate-400 mt-2 text-center">ResearchMate Academic System</p>
+        </div>
+      </aside>
+
+      <!-- Sidebar Backdrop for Mobile -->
+      <div id="sidebarBackdrop" class="fixed inset-0 bg-slate-900/30 backdrop-blur-xs z-30 hidden md:hidden"></div>
+
+      <!-- MAIN CONTENT VIEW AREA -->
+      <main class="flex-1 overflow-y-auto custom-scrollbar p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full">
+
+        <!-- ========================================== -->
+        <!-- VIEW 1: DASHBOARD -->
+        <!-- ========================================== -->
+        <section id="view-dashboard" class="page-view space-y-6">
+          <!-- Welcome and Target Countdown banner -->
+          <div class="bg-white border border-slate-200 rounded-xl p-5 sm:p-6 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 class="text-xl font-bold text-slate-900">
+                안녕하세요, <span id="dashResearcherName" class="text-slate-900 underline decoration-slate-300">연구자</span>님.
+              </h2>
+              <p class="text-xs sm:text-sm text-slate-500 mt-1">오늘도 체계적이고 깊이 있는 학술 연구를 응원합니다.</p>
+            </div>
+            <div id="dashCountdownCard" class="bg-slate-50 border border-slate-200 rounded-lg p-3 sm:p-4 text-center sm:text-right shrink-0">
+              <span class="text-xs text-slate-500 block">논문 최종 제출 D-day</span>
+              <div id="dashCountdownNumber" class="text-lg sm:text-xl font-black text-slate-900">일정 미지정</div>
+            </div>
+          </div>
+
+          <!-- Top Stat Cards (7 items) -->
+          <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <!-- Card 1: References total -->
+            <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+              <div class="flex items-center justify-between text-slate-500 mb-2">
+                <span class="text-xs font-medium">등록 문헌 수</span>
+                <i data-lucide="book-open" class="w-4 h-4 text-slate-400"></i>
+              </div>
+              <div class="flex items-baseline gap-2">
+                <span id="statRefTotal" class="text-2xl font-bold text-slate-900">0</span>
+                <span class="text-xs text-slate-500">편</span>
+              </div>
+              <div class="mt-2 text-[11px] text-slate-500 flex gap-2">
+                <span>읽음 <strong id="statRefRead" class="text-slate-800">0</strong></span>
+                <span>•</span>
+                <span>읽는 중 <strong id="statRefReading" class="text-slate-800">0</strong></span>
+              </div>
+            </div>
+
+            <!-- Card 2: Overall Progress -->
+            <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+              <div class="flex items-center justify-between text-slate-500 mb-2">
+                <span class="text-xs font-medium">전체 논문 진행률</span>
+                <i data-lucide="trending-up" class="w-4 h-4 text-slate-400"></i>
+              </div>
+              <div class="flex items-baseline gap-2">
+                <span id="statProgress" class="text-2xl font-bold text-slate-900">0%</span>
+                <span class="text-xs text-slate-500">완성도</span>
+              </div>
+              <div class="w-full bg-slate-100 rounded-full h-1.5 mt-3 overflow-hidden">
+                <div id="statProgressBar" class="bg-slate-800 h-1.5 rounded-full" style="width: 0%"></div>
+              </div>
+            </div>
+
+            <!-- Card 3: Weekly Writing Words -->
+            <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+              <div class="flex items-center justify-between text-slate-500 mb-2">
+                <span class="text-xs font-medium">이번 주 작성 글자 수</span>
+                <i data-lucide="file-text" class="w-4 h-4 text-slate-400"></i>
+              </div>
+              <div class="flex items-baseline gap-2">
+                <span id="statWeekChars" class="text-2xl font-bold text-slate-900">0</span>
+                <span class="text-xs text-slate-500">자</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-2 truncate">누적 총량: <span id="statTotalChars">0</span>자</p>
+            </div>
+
+            <!-- Card 4: Tasks Completed -->
+            <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
+              <div class="flex items-center justify-between text-slate-500 mb-2">
+                <span class="text-xs font-medium">완료한 할 일 수</span>
+                <i data-lucide="check-circle-2" class="w-4 h-4 text-slate-400"></i>
+              </div>
+              <div class="flex items-baseline gap-2">
+                <span id="statTasksDone" class="text-2xl font-bold text-slate-900">0</span>
+                <span class="text-xs text-slate-500">개</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-2">전체 <span id="statTasksTotal">0</span>개 중</p>
+            </div>
+          </div>
+
+          <!-- Dashboard Main Grid Sections -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Left 2 Cols: Chapters Progress & Recent Writing Logs & References -->
+            <div class="lg:col-span-2 space-y-6">
+              
+              <!-- 1. 논문 장별 진행률 -->
+              <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+                <div class="flex items-center justify-between mb-4">
+                  <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="bar-chart-2" class="w-4 h-4 text-slate-500"></i>
+                    논문 장별 진행률
+                  </h3>
+                  <button onclick="navigateView('chapters')" class="text-xs text-slate-500 hover:text-slate-900 font-medium">관리 바로가기 &rarr;</button>
+                </div>
+                <div id="dashChapterList" class="space-y-3">
+                  <!-- Injected via JS -->
+                </div>
+              </div>
+
+              <!-- 2. 최근 작성 기록 & 7일 그래프 -->
+              <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+                <div class="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                      <i data-lucide="activity" class="w-4 h-4 text-slate-500"></i>
+                      최근 작성 기록 및 주간 추이
+                    </h3>
+                    <p class="text-[11px] text-slate-400 mt-0.5">최근 7일간의 작성 글자 수 추이</p>
+                  </div>
+                  <button onclick="navigateView('writingLogs')" class="text-xs text-slate-500 hover:text-slate-900 font-medium">작성 기록 &rarr;</button>
+                </div>
+                
+                <div class="h-44 w-full mb-4">
+                  <canvas id="writingChart"></canvas>
+                </div>
+
+                <div class="border-t border-slate-100 pt-3">
+                  <div class="text-xs font-semibold text-slate-600 mb-2">최신 작성 로그</div>
+                  <div id="dashRecentLogs" class="space-y-2 text-xs">
+                    <!-- Injected -->
+                  </div>
+                </div>
+              </div>
+
+              <!-- 3. 최근 등록 문헌 -->
+              <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+                <div class="flex items-center justify-between mb-4">
+                  <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="book-marked" class="w-4 h-4 text-slate-500"></i>
+                    최근 등록 문헌
+                  </h3>
+                  <button onclick="navigateView('references')" class="text-xs text-slate-500 hover:text-slate-900 font-medium">전체 문헌 &rarr;</button>
+                </div>
+                <div id="dashRecentRefs" class="space-y-2">
+                  <!-- Injected -->
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Right 1 Col: This week's tasks, Submission Milestones, Recent Notes -->
+            <div class="space-y-6">
+
+              <!-- 이번 주 할 일 -->
+              <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="check-square" class="w-4 h-4 text-slate-500"></i>
+                    이번 주 할 일
+                  </h3>
+                  <button onclick="navigateView('tasks')" class="text-xs text-slate-500 hover:text-slate-900 font-medium">할 일 전체 &rarr;</button>
+                </div>
+                <div id="dashWeekTasks" class="space-y-2">
+                  <!-- Injected -->
+                </div>
+              </div>
+
+              <!-- 논문 주요 심사 및 제출 일정 -->
+              <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="calendar" class="w-4 h-4 text-slate-500"></i>
+                    주요 논문 심사·제출 일정
+                  </h3>
+                  <button onclick="navigateView('tasks')" class="text-xs text-slate-500 hover:text-slate-900 font-medium">관리 &rarr;</button>
+                </div>
+                <div id="dashMilestones" class="space-y-2 text-xs">
+                  <!-- Injected -->
+                </div>
+              </div>
+
+              <!-- 최근 연구 메모 -->
+              <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="sticky-note" class="w-4 h-4 text-slate-500"></i>
+                    최근 연구 메모
+                  </h3>
+                  <button onclick="navigateView('notes')" class="text-xs text-slate-500 hover:text-slate-900 font-medium">메모장 &rarr;</button>
+                </div>
+                <div id="dashRecentNotes" class="space-y-2 text-xs">
+                  <!-- Injected -->
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW 2: 연구계획 관리 (Research Plan) -->
+        <!-- ========================================== -->
+        <section id="view-plan" class="page-view hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+            <div>
+              <h2 class="text-xl font-bold text-slate-900">논문 연구계획</h2>
+              <p class="text-xs sm:text-sm text-slate-500 mt-1">논문의 기초 설계와 연구 질문, 방법론, 기대효과를 정리하고 항시 보완합니다.</p>
+            </div>
+            <button 
+              id="savePlanBtn" 
+              class="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg shadow-xs transition"
+            >
+              <i data-lucide="save" class="w-4 h-4"></i>
+              <span>연구계획 저장</span>
+            </button>
+          </div>
+
+          <form id="researchPlanForm" class="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 shadow-xs space-y-6">
+            
+            <!-- Section 1: Overview -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div class="md:col-span-2">
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  논문 가제 / 최종 제목 <span class="text-rose-500">*</span>
+                </label>
+                <input 
+                  type="text" 
+                  id="planTitle" 
+                  placeholder="예: 생성형 AI 도구가 대학원생의 학술 연구 자기효능감에 미치는 영향"
+                  class="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 focus:bg-white transition"
+                >
+              </div>
+
+              <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  연구 분야 / 학과
+                </label>
+                <input 
+                  type="text" 
+                  id="planField" 
+                  placeholder="예: 교육공학 / 인공지능응용학"
+                  class="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 focus:bg-white transition"
+                >
+              </div>
+            </div>
+
+            <!-- Target Submission Date -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 bg-slate-50 p-4 rounded-lg border border-slate-200">
+              <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                  논문 최종 제출 예정일 <span class="text-rose-500">*</span>
+                </label>
+                <input 
+                  type="date" 
+                  id="planSubmissionDate" 
+                  class="w-full px-4 py-2.5 text-sm bg-white border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 transition"
+                >
+              </div>
+              <div class="md:col-span-2 flex items-center text-xs text-slate-500 leading-relaxed pt-2">
+                제출 예정일을 지정하면 대시보드 및 상단 바에서 실시간 잔여 D-day("논문 제출까지 OO일 남았습니다")가 자동 계산되어 동기 부여를 돕습니다.
+              </div>
+            </div>
+
+            <div class="border-t border-slate-100 pt-6">
+              <h3 class="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <i data-lucide="target" class="w-4 h-4 text-slate-600"></i>
+                연구 문제 및 목적
+              </h3>
+              
+              <div class="space-y-5">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1.5">연구 배경 (Background)</label>
+                  <textarea id="planBackground" rows="3" placeholder="연구 주제를 탐색하게 된 사회적, 학문적 배경 및 기존 연구의 동향" class="w-full p-3 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 focus:bg-white transition"></textarea>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1.5">연구 목적 (Purpose)</label>
+                    <textarea id="planPurpose" rows="3" placeholder="본 연구를 통해 궁극적으로 규명하고자 하는 핵심 목표" class="w-full p-3 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 focus:bg-white transition"></textarea>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1.5">연구 문제 / 가설 (Research Questions / Hypotheses)</label>
+                    <textarea id="planQuestions" rows="3" placeholder="1. 연구문제 1&#10;2. 연구문제 2&#10;3. 가설 H1, H2..." class="w-full p-3 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 focus:bg-white transition"></textarea>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="border-t border-slate-100 pt-6">
+              <h3 class="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <i data-lucide="cpu" class="w-4 h-4 text-slate-600"></i>
+                연구 대상 및 방법론
+              </h3>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1.5">연구 대상 및 표본 (Subjects / Sample)</label>
+                  <textarea id="planTarget" rows="3" placeholder="모집단, 표집 방법, 표본 수, 참가자 특성 등" class="w-full p-3 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 focus:bg-white transition"></textarea>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1.5">연구 범위 및 기간 (Scope & Duration)</label>
+                  <textarea id="planScope" rows="3" placeholder="시간적, 공간적, 내용적 연구 범위 한정 사항" class="w-full p-3 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 focus:bg-white transition"></textarea>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1.5">연구 방법 (Methodology)</label>
+                  <textarea id="planMethod" rows="3" placeholder="양적연구(구조방정식, 설문조사), 질적연구(심층면담, 사례연구), 문헌연구 등" class="w-full p-3 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 focus:bg-white transition"></textarea>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1.5">주요 변수 또는 분석 요소 (Variables / Metrics)</label>
+                  <textarea id="planVariables" rows="3" placeholder="독립변수, 종속변수, 조절/매개변수 및 척도 구성" class="w-full p-3 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 focus:bg-white transition"></textarea>
+                </div>
+              </div>
+            </div>
+
+            <div class="border-t border-slate-100 pt-6">
+              <h3 class="text-sm font-bold text-slate-900 mb-4 flex items-center gap-2">
+                <i data-lucide="award" class="w-4 h-4 text-slate-600"></i>
+                필요성 및 기대효과
+              </h3>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1.5">연구의 필요성 (Significance)</label>
+                  <textarea id="planSignificance" rows="3" placeholder="이 연구가 지금 꼭 수행되어야 하는 이유" class="w-full p-3 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 focus:bg-white transition"></textarea>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1.5">예상 결과 (Expected Results)</label>
+                  <textarea id="planExpectedResults" rows="3" placeholder="연구를 통해 도출될 것으로 예상되는 핵심 결과" class="w-full p-3 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 focus:bg-white transition"></textarea>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-700 mb-1.5">연구의 기대효과 및 학술적 기여 (Contribution)</label>
+                  <textarea id="planContribution" rows="3" placeholder="학술적, 정책적, 실무적 시사점 및 기여 방안" class="w-full p-3 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 focus:bg-white transition"></textarea>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex justify-end pt-4 border-t border-slate-100">
+              <button 
+                type="submit" 
+                class="px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg shadow-xs transition cursor-pointer"
+              >
+                저장하기
+              </button>
+            </div>
+          </form>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW 3: 문헌 관리 (References) -->
+        <!-- ========================================== -->
+        <section id="view-references" class="page-view hidden space-y-6">
+          <!-- Header bar -->
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+            <div>
+              <h2 class="text-xl font-bold text-slate-900">참고문헌 관리</h2>
+              <p class="text-xs sm:text-sm text-slate-500 mt-1">선행연구 논문 및 서적의 메타데이터, 연구변수, 내 논문 활용 장을 상세히 기록합니다.</p>
+            </div>
+            <button 
+              id="openAddRefModalBtn" 
+              class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg shadow-xs transition"
+            >
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              <span>+ 문헌 추가</span>
+            </button>
+          </div>
+
+          <!-- Search & Filter Controls -->
+          <div class="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-xs space-y-4">
+            <!-- Search Bar -->
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+                <i data-lucide="search" class="w-4 h-4"></i>
+              </span>
+              <input 
+                type="text" 
+                id="refSearchInput" 
+                placeholder="논문 제목, 저자, 키워드, 연구방법, 주요 결과, 내 논문과의 관련성 검색..." 
+                class="w-full pl-10 pr-4 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-slate-900 focus:bg-white transition"
+              >
+            </div>
+
+            <!-- Filters Grid -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">발행연도</label>
+                <select id="refFilterYear" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden">
+                  <option value="">전체 연도</option>
+                  <!-- Populated dynamically -->
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">자료 유형</label>
+                <select id="refFilterType" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden">
+                  <option value="">전체 유형</option>
+                  <option value="학술논문">학술논문</option>
+                  <option value="석사학위논문">석사학위논문</option>
+                  <option value="박사학위논문">박사학위논문</option>
+                  <option value="단행본">단행본</option>
+                  <option value="연구보고서">연구보고서</option>
+                  <option value="웹자료">웹자료</option>
+                  <option value="기타">기타</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">읽기 상태</label>
+                <select id="refFilterReadStatus" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden">
+                  <option value="">전체 상태</option>
+                  <option value="읽지 않음">읽지 않음</option>
+                  <option value="읽는 중">읽는 중</option>
+                  <option value="읽음">읽음</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">중요도</label>
+                <select id="refFilterImportance" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden">
+                  <option value="">전체 중요도</option>
+                  <option value="높음">높음</option>
+                  <option value="보통">보통</option>
+                  <option value="낮음">낮음</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">활용 예정 장</label>
+                <select id="refFilterChapter" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden">
+                  <option value="">전체 장</option>
+                  <!-- Populated dynamically with chapters -->
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-500 mb-1">정렬 기준</label>
+                <select id="refSortOrder" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-md focus:outline-hidden">
+                  <option value="created_desc">최신 등록순</option>
+                  <option value="created_asc">오래된 등록순</option>
+                  <option value="year_desc">발행연도 최신순</option>
+                  <option value="year_asc">발행연도 오래된순</option>
+                  <option value="importance_desc">중요도순</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Result Count & Reset -->
+            <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+              <span class="text-slate-600 font-medium">검색 결과: <strong id="refCountDisplay" class="text-slate-900 font-bold">0</strong>편</span>
+              <button id="resetRefFilterBtn" class="text-slate-500 hover:text-slate-900 underline">필터 초기화</button>
+            </div>
+          </div>
+
+          <!-- Reference Cards / Table List -->
+          <div id="referencesContainer" class="space-y-3">
+            <!-- Injected via JS -->
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW 4: 논문 진행 관리 (Chapters & Sections) -->
+        <!-- ========================================== -->
+        <section id="view-chapters" class="page-view hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+            <div>
+              <h2 class="text-xl font-bold text-slate-900">논문 목차 및 장별 진행 관리</h2>
+              <p class="text-xs sm:text-sm text-slate-500 mt-1">논문의 장과 절을 구성하고 상태를 업데이트하면 전체 논문 진행률이 자동 산출됩니다.</p>
+            </div>
+            <button 
+              id="openAddChapterModalBtn" 
+              class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg shadow-xs transition"
+            >
+              <i data-lucide="folder-plus" class="w-4 h-4"></i>
+              <span>+ 새 장(Chapter) 추가</span>
+            </button>
+          </div>
+
+          <!-- Overall Progress Summary Banner -->
+          <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+              <div>
+                <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Overall Thesis Progress</span>
+                <div class="flex items-baseline gap-2 mt-1">
+                  <span id="chaptersOverallPercent" class="text-3xl font-black text-slate-900">0%</span>
+                  <span class="text-xs text-slate-500">완료됨 (절 기준 가중 평균)</span>
+                </div>
+              </div>
+              <div class="text-xs text-slate-500 bg-slate-50 p-2.5 rounded-lg border border-slate-200/80">
+                <span class="font-semibold text-slate-700">진행률 환산 기준:</span> 미작성 (0%) | 작성 중 (25%) | 초안 완료 (50%) | 수정 중 (75%) | 완료 (100%)
+              </div>
+            </div>
+            <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
+              <div id="chaptersOverallBar" class="bg-slate-900 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <!-- Chapter Hierarchy Container -->
+          <div id="chaptersHierarchyContainer" class="space-y-5">
+            <!-- Injected via JS -->
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW 5: 작성 기록 (Writing Logs) -->
+        <!-- ========================================== -->
+        <section id="view-writingLogs" class="page-view hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+            <div>
+              <h2 class="text-xl font-bold text-slate-900">논문 작성 기록 (Writing Log)</h2>
+              <p class="text-xs sm:text-sm text-slate-500 mt-1">매일 작성한 글자 수와 작업 시간, 애로사항 및 다음 계획을 성실히 기록합니다.</p>
+            </div>
+            <button 
+              id="openAddLogModalBtn" 
+              class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg shadow-xs transition"
+            >
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              <span>+ 오늘 작성 기록 남기기</span>
+            </button>
+          </div>
+
+          <!-- 6 Stat Cards for Writing -->
+          <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div class="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+              <span class="text-[11px] text-slate-500 block">오늘 작성 글자 수</span>
+              <span id="logStatTodayChars" class="text-lg font-bold text-slate-900 mt-1 block">0자</span>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+              <span class="text-[11px] text-slate-500 block">이번 주 작성 글자 수</span>
+              <span id="logStatWeekChars" class="text-lg font-bold text-slate-900 mt-1 block">0자</span>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+              <span class="text-[11px] text-slate-500 block">이번 달 작성 글자 수</span>
+              <span id="logStatMonthChars" class="text-lg font-bold text-slate-900 mt-1 block">0자</span>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+              <span class="text-[11px] text-slate-500 block">전체 누적 작성량</span>
+              <span id="logStatTotalChars" class="text-lg font-bold text-slate-900 mt-1 block">0자</span>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+              <span class="text-[11px] text-slate-500 block">이번 주 일평균 작성량</span>
+              <span id="logStatWeekAvg" class="text-lg font-bold text-slate-900 mt-1 block">0자</span>
+            </div>
+            <div class="bg-white border border-slate-200 rounded-xl p-3.5 shadow-xs">
+              <span class="text-[11px] text-slate-500 block">이번 주 총 작업 시간</span>
+              <span id="logStatWeekHours" class="text-lg font-bold text-slate-900 mt-1 block">0시간</span>
+            </div>
+          </div>
+
+          <!-- Weekly Chart Card in Logs Page -->
+          <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+            <h3 class="text-sm font-bold text-slate-900 mb-3 flex items-center gap-2">
+              <i data-lucide="bar-chart" class="w-4 h-4 text-slate-600"></i>
+              최근 7일간 작성 글자 수 추이
+            </h3>
+            <div class="h-48 w-full">
+              <canvas id="writingLogPageChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Writing Logs List (Timeline) -->
+          <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+            <h3 class="text-sm font-bold text-slate-900 mb-4">일자별 작성 기록 목록</h3>
+            <div id="writingLogsList" class="space-y-4">
+              <!-- Injected via JS -->
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW 6: 연구 일정 / 할 일 (Tasks & Schedule) -->
+        <!-- ========================================== -->
+        <section id="view-tasks" class="page-view hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+            <div>
+              <h2 class="text-xl font-bold text-slate-900">연구 일정 및 할 일 (To-Do & Milestones)</h2>
+              <p class="text-xs sm:text-sm text-slate-500 mt-1">논문 심사 일정 마일스톤과 주간 세부 태스크를 함께 관리합니다.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button 
+                id="openAddMilestoneModalBtn" 
+                class="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg shadow-2xs transition"
+              >
+                <i data-lucide="calendar-plus" class="w-4 h-4"></i>
+                <span>+ 심사 일정 추가</span>
+              </button>
+              <button 
+                id="openAddTaskModalBtn" 
+                class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg shadow-xs transition"
+              >
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                <span>+ 새 할 일 추가</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Milestones Timeline Box -->
+          <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="flag" class="w-4 h-4 text-slate-700"></i>
+                주요 논문 심사 및 제출 마일스톤
+              </h3>
+              <span class="text-xs text-slate-400">계획서, 초안, 지도교수 검토, 예심, 본심, 최종 제출 등</span>
+            </div>
+            <div id="milestonesContainer" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <!-- Injected via JS -->
+            </div>
+          </div>
+
+          <!-- Tasks Management Section -->
+          <div class="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <h3 class="text-sm font-bold text-slate-900 flex items-center gap-2">
+                <i data-lucide="check-square" class="w-4 h-4 text-slate-700"></i>
+                할 일 목록
+              </h3>
+
+              <!-- Filter tabs -->
+              <div class="flex items-center gap-1 bg-slate-100 p-1 rounded-lg text-xs">
+                <button id="taskFilterAll" class="task-tab px-3 py-1 rounded-md font-medium text-slate-800 bg-white shadow-2xs" onclick="filterTasks('all')">전체</button>
+                <button id="taskFilterPending" class="task-tab px-3 py-1 rounded-md font-medium text-slate-600 hover:text-slate-900" onclick="filterTasks('pending')">미완료</button>
+                <button id="taskFilterDone" class="task-tab px-3 py-1 rounded-md font-medium text-slate-600 hover:text-slate-900" onclick="filterTasks('done')">완료됨</button>
+                <button id="taskFilterOverdue" class="task-tab px-3 py-1 rounded-md font-medium text-rose-600 hover:text-rose-800" onclick="filterTasks('overdue')">기한 경과</button>
+              </div>
+            </div>
+
+            <!-- Task Items List -->
+            <div id="tasksListContainer" class="space-y-2.5">
+              <!-- Injected via JS -->
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- VIEW 7: 연구 메모장 (Notes) -->
+        <!-- ========================================== -->
+        <section id="view-notes" class="page-view hidden space-y-6">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+            <div>
+              <h2 class="text-xl font-bold text-slate-900">연구 아이디어 및 메모</h2>
+              <p class="text-xs sm:text-sm text-slate-500 mt-1">연구 중 떠오르는 영감, 세미나 피드백, 논리 보강 아이디어를 가볍게 기록합니다.</p>
+            </div>
+            <button 
+              id="openAddNoteModalBtn" 
+              class="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-semibold rounded-lg shadow-xs transition"
+            >
+              <i data-lucide="plus" class="w-4 h-4"></i>
+              <span>+ 새 메모 작성</span>
+            </button>
+          </div>
+
+          <div id="notesContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Injected via JS -->
+          </div>
+        </section>
+
+      </main>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: 문헌 추가 / 수정 (Reference Modal) -->
+  <!-- ========================================== -->
+  <div id="refModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl shadow-xl max-w-3xl w-full my-6 max-h-[90vh] flex flex-col border border-slate-200">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+        <h3 id="refModalTitle" class="text-base font-bold text-slate-900">참고문헌 등록</h3>
+        <button type="button" onclick="closeRefModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="refForm" class="p-6 overflow-y-auto custom-scrollbar space-y-6 flex-1">
+        <input type="hidden" id="refId">
+
+        <!-- 1. 기본 정보 -->
+        <div>
+          <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-slate-900 inline-block"></span> 1. 기본 메타데이터
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-semibold text-slate-700 mb-1">
+                논문 / 자료 제목 <span class="text-rose-500">*</span>
+              </label>
+              <input type="text" id="refTitle" required placeholder="논문 또는 단행본의 완전한 제목" class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-slate-900">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">
+                저자 (Authors) <span class="text-rose-500">*</span>
+              </label>
+              <input type="text" id="refAuthors" required placeholder="예: 김연구, 이지도 or Smith, J." class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-slate-900">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">
+                발행연도 <span class="text-rose-500">*</span>
+              </label>
+              <input type="number" id="refYear" required min="1900" max="2099" placeholder="예: 2024" class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-slate-900">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">
+                자료 유형 <span class="text-rose-500">*</span>
+              </label>
+              <select id="refType" required class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-slate-900">
+                <option value="학술논문">학술논문</option>
+                <option value="석사학위논문">석사학위논문</option>
+                <option value="박사학위논문">박사학위논문</option>
+                <option value="단행본">단행본</option>
+                <option value="연구보고서">연구보고서</option>
+                <option value="웹자료">웹자료</option>
+                <option value="기타">기타</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">학술지 또는 학교 / 발행처</label>
+              <input type="text" id="refPublication" placeholder="예: 한국교육공학회지 또는 서울대학교 대학원" class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-slate-900">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">DOI 또는 URL</label>
+              <input type="text" id="refUrl" placeholder="https://doi.org/... 또는 RISS/DBpia 링크" class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-slate-900">
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">언어</label>
+              <select id="refLanguage" class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+                <option value="한국어">한국어</option>
+                <option value="영어">영어 (English)</option>
+                <option value="기타">기타</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. 읽기 상태 및 중요도 & 활용 장 -->
+        <div class="border-t border-slate-100 pt-5">
+          <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-slate-900 inline-block"></span> 2. 관리 및 활용 계획
+          </h4>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">읽기 상태</label>
+              <select id="refReadStatus" class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+                <option value="읽지 않음">읽지 않음</option>
+                <option value="읽는 중">읽는 중</option>
+                <option value="읽음">읽음</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">중요도</label>
+              <select id="refImportance" class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+                <option value="높음">높음 (필수 인용)</option>
+                <option value="보통" selected>보통</option>
+                <option value="낮음">낮음 (단순 참고)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">활용 예정 장(Chapter)</label>
+              <select id="refTargetChapter" class="w-full px-3.5 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+                <option value="">미지정</option>
+                <!-- Filled dynamically with user's chapters -->
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. 연구 내용 상세 분석 -->
+        <div class="border-t border-slate-100 pt-5">
+          <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-slate-900 inline-block"></span> 3. 선행연구 내용 분석
+          </h4>
+          <div class="space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">연구 목적 (Purpose)</label>
+                <textarea id="refPurpose" rows="2" placeholder="해당 선행연구의 목적" class="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white"></textarea>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">연구 배경 (Background)</label>
+                <textarea id="refBackground" rows="2" placeholder="해당 선행연구의 배경 문제의식" class="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white"></textarea>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">연구 대상 및 표본</label>
+                <input type="text" id="refTarget" placeholder="예: 대학생 350명" class="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">연구 기간</label>
+                <input type="text" id="refPeriod" placeholder="예: 2023.03 ~ 2023.09" class="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">연구 방법 (Method)</label>
+                <input type="text" id="refMethod" placeholder="예: 구조방정식 모형(SEM), 설문조사" class="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+              </div>
+            </div>
+
+            <!-- Variables -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200/60">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-600 mb-1">독립변수 (IV)</label>
+                <input type="text" id="refIv" placeholder="독립변수명" class="w-full p-1.5 text-xs bg-white border border-slate-200 rounded focus:outline-hidden">
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-600 mb-1">종속변수 (DV)</label>
+                <input type="text" id="refDv" placeholder="종속변수명" class="w-full p-1.5 text-xs bg-white border border-slate-200 rounded focus:outline-hidden">
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-600 mb-1">매개변수 (Med)</label>
+                <input type="text" id="refMed" placeholder="매개변수명" class="w-full p-1.5 text-xs bg-white border border-slate-200 rounded focus:outline-hidden">
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-600 mb-1">조절변수 (Mod)</label>
+                <input type="text" id="refMod" placeholder="조절변수명" class="w-full p-1.5 text-xs bg-white border border-slate-200 rounded focus:outline-hidden">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">주요 연구 결과 (Findings)</label>
+              <textarea id="refResults" rows="2" placeholder="선행연구의 통계적 검증 결과 및 핵심 발견" class="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white"></textarea>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">연구의 한계 (Limitations)</label>
+              <textarea id="refLimitations" rows="2" placeholder="해당 연구의 한계점 (내 논문의 차별성 근거가 될 수 있음)" class="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. 내 논문과의 연계 및 인용 -->
+        <div class="border-t border-slate-100 pt-5">
+          <h4 class="text-xs font-bold text-slate-900 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-slate-900 inline-block"></span> 4. 내 논문 연계 및 인용 메모
+          </h4>
+          <div class="space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">내 논문과의 관련성</label>
+                <textarea id="refRelevance" rows="2" placeholder="내 연구 문제 및 가설 설정에 주는 시사점" class="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white"></textarea>
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">내 논문에서 사용할 부분</label>
+                <textarea id="refUsePart" rows="2" placeholder="이론적 배경 정의, 측정 도구 인용, 고찰 시 비교 등" class="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white"></textarea>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">중요 페이지</label>
+                <input type="text" id="refPages" placeholder="예: pp. 45-52, Table 3" class="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">키워드 (쉼표로 구분)</label>
+                <input type="text" id="refKeywords" placeholder="예: 자기효능감, 학술글쓰기, AI윤리" class="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-slate-700 mb-1">중요 인용문 또는 메모</label>
+              <textarea id="refQuote" rows="3" placeholder="원문 인용 문장이나 직접 번역한 핵심 문구" class="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white font-mono"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
+          <button type="button" onclick="closeRefModal()" class="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition">취소</button>
+          <button type="submit" class="px-5 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg shadow-xs transition">저장</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: 문헌 상세보기 (Reference Detail Modal) -->
+  <!-- ========================================== -->
+  <div id="refDetailModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl shadow-xl max-w-2xl w-full my-6 max-h-[90vh] flex flex-col border border-slate-200">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+        <div>
+          <span id="detailRefTypeBadge" class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">학술논문</span>
+          <h3 id="detailRefTitle" class="text-base font-bold text-slate-900 mt-1">논문 제목</h3>
+        </div>
+        <button type="button" onclick="closeRefDetailModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div id="detailRefBody" class="p-6 overflow-y-auto custom-scrollbar space-y-5 text-xs leading-relaxed text-slate-700">
+        <!-- Rendered via JS -->
+      </div>
+
+      <div class="px-6 py-3 border-t border-slate-200 flex justify-between items-center bg-slate-50 rounded-b-2xl">
+        <span id="detailRefDate" class="text-[11px] text-slate-400">등록일: -</span>
+        <div class="flex gap-2">
+          <button id="detailEditBtn" class="px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition">수정</button>
+          <button onclick="closeRefDetailModal()" class="px-4 py-1.5 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg transition">닫기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: 장 추가/수정 (Chapter Modal) -->
+  <!-- ========================================== -->
+  <div id="chapterModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6 border border-slate-200">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="chapterModalTitle" class="text-base font-bold text-slate-900">장(Chapter) 추가</h3>
+        <button onclick="closeChapterModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form id="chapterForm" class="space-y-4 text-xs">
+        <input type="hidden" id="modalChapterId">
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">장 번호 및 명칭 <span class="text-rose-500">*</span></label>
+          <input type="text" id="modalChapterTitle" required placeholder="예: 제1장 서론" class="w-full p-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+        </div>
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">장 설명 / 메모</label>
+          <textarea id="modalChapterMemo" rows="2" placeholder="이 장에서 다룰 전반적인 범위 및 목표" class="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white"></textarea>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeChapterModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium">취소</button>
+          <button type="submit" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg">저장</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: 절 추가/수정 (Section Modal) -->
+  <!-- ========================================== -->
+  <div id="sectionModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl max-w-lg w-full p-6 border border-slate-200">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="sectionModalTitle" class="text-base font-bold text-slate-900">절(Section) 추가</h3>
+        <button onclick="closeSectionModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form id="sectionForm" class="space-y-4 text-xs">
+        <input type="hidden" id="modalSecChapterId">
+        <input type="hidden" id="modalSecId">
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">절 명칭 <span class="text-rose-500">*</span></label>
+          <input type="text" id="modalSecTitle" required placeholder="예: 1.1 연구의 필요성 및 목적" class="w-full p-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">작성 상태 <span class="text-rose-500">*</span></label>
+            <select id="modalSecStatus" required class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white text-xs">
+              <option value="미작성">미작성 (0%)</option>
+              <option value="작성 중">작성 중 (25%)</option>
+              <option value="초안 완료">초안 완료 (50%)</option>
+              <option value="수정 중">수정 중 (75%)</option>
+              <option value="완료">완료 (100%)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">목표 글자 수</label>
+            <input type="number" id="modalSecTargetChars" placeholder="예: 2500" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white text-xs">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">현재 글자 수</label>
+            <input type="number" id="modalSecCurrentChars" placeholder="예: 1200" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white text-xs">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">목표 완료일</label>
+            <input type="date" id="modalSecDeadline" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white text-xs">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">작성 메모 / 유의점</label>
+          <textarea id="modalSecMemo" rows="2" placeholder="다루어야 할 핵심 키워드나 교수님 피드백 반영 사항" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white text-xs"></textarea>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeSectionModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium">취소</button>
+          <button type="submit" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg">저장</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: 작성 기록 추가 / 수정 (Writing Log Modal) -->
+  <!-- ========================================== -->
+  <div id="writingLogModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+    <div class="bg-white rounded-2xl shadow-xl max-w-xl w-full my-6 max-h-[90vh] flex flex-col border border-slate-200">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+        <h3 id="writingLogModalTitle" class="text-base font-bold text-slate-900">논문 작성 기록</h3>
+        <button onclick="closeWritingLogModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form id="writingLogForm" class="p-6 overflow-y-auto custom-scrollbar space-y-4 text-xs flex-1">
+        <input type="hidden" id="logId">
+        
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">기록 날짜 <span class="text-rose-500">*</span></label>
+            <input type="date" id="logDate" required class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">오늘 작성 글자 수 <span class="text-rose-500">*</span></label>
+            <input type="number" id="logChars" required min="0" placeholder="예: 1200" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">작업 시간 (시간) <span class="text-rose-500">*</span></label>
+            <input type="number" step="0.5" id="logHours" required min="0" placeholder="예: 3.5" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">오늘 작성한 장 또는 절</label>
+            <input type="text" id="logChapterSection" placeholder="예: 제2장 2.2 이론적 고찰" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">오늘 읽은 문헌 수</label>
+            <input type="number" id="logReadCount" min="0" placeholder="예: 3" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">오늘 완료한 작업 <span class="text-rose-500">*</span></label>
+          <textarea id="logDoneTasks" required rows="2" placeholder="예: 선행연구 3편 요약 및 2.1절 초안 1차 탈고 완료" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white"></textarea>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">문제점 또는 어려움 (Challenges)</label>
+          <textarea id="logChallenges" rows="2" placeholder="작성 중 부딪힌 논리적 비약이나 추가 탐색이 필요한 부분" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white"></textarea>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">다음 작업 계획</label>
+          <textarea id="logNextPlan" rows="2" placeholder="내일 또는 다음 세션에서 이어서 진행할 작업" class="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white"></textarea>
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">자유 메모</label>
+          <input type="text" id="logFreeMemo" placeholder="컨디션, 지도교수님 미팅 준비사항 등" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex justify-end gap-2">
+          <button type="button" onclick="closeWritingLogModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium">취소</button>
+          <button type="submit" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg">기록 저장</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: 할 일 추가 / 수정 (Task Modal) -->
+  <!-- ========================================== -->
+  <div id="taskModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6 border border-slate-200">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="taskModalTitle" class="text-base font-bold text-slate-900">새 할 일 추가</h3>
+        <button onclick="closeTaskModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form id="taskForm" class="space-y-4 text-xs">
+        <input type="hidden" id="taskId">
+        
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">할 일 제목 <span class="text-rose-500">*</span></label>
+          <input type="text" id="taskTitle" required placeholder="예: 설문 도구 타당도 검증 요인분석 실시" class="w-full p-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">상세 내용</label>
+          <textarea id="taskDetail" rows="2" placeholder="수행 방법 또는 세부 참고사항" class="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white"></textarea>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">마감일 <span class="text-rose-500">*</span></label>
+            <input type="date" id="taskDueDate" required class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white text-xs">
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">관련 장(Chapter)</label>
+            <select id="taskChapter" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white text-xs">
+              <option value="">연관 없음</option>
+              <!-- Filled dynamically -->
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">우선순위</label>
+            <select id="taskPriority" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white text-xs">
+              <option value="높음">높음 (긴급)</option>
+              <option value="보통" selected>보통</option>
+              <option value="낮음">낮음</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">진행 상태</label>
+            <select id="taskStatus" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white text-xs">
+              <option value="예정" selected>예정</option>
+              <option value="진행 중">진행 중</option>
+              <option value="완료">완료</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="pt-2 flex justify-end gap-2">
+          <button type="button" onclick="closeTaskModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium">취소</button>
+          <button type="submit" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg">저장</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: 마일스톤 추가 / 수정 (Milestone Modal) -->
+  <!-- ========================================== -->
+  <div id="milestoneModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6 border border-slate-200">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="milestoneModalTitle" class="text-base font-bold text-slate-900">논문 심사 및 제출 일정</h3>
+        <button onclick="closeMilestoneModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form id="milestoneForm" class="space-y-4 text-xs">
+        <input type="hidden" id="milestoneId">
+        
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">일정 명칭 <span class="text-rose-500">*</span></label>
+          <input type="text" id="milestoneTitle" required placeholder="예: 연구계획서 제출, 예비심사, 본심사, 최종 제출" class="w-full p-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">예정 일자 <span class="text-rose-500">*</span></label>
+          <input type="date" id="milestoneDate" required class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white text-xs">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">준비 내용 및 메모</label>
+          <textarea id="milestoneMemo" rows="2" placeholder="심사용 제본 부수, 서류 양식 준비 등" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white text-xs"></textarea>
+        </div>
+
+        <div class="flex items-center gap-2 pt-1">
+          <input type="checkbox" id="milestoneCompleted" class="w-4 h-4 text-slate-900 rounded border-slate-300">
+          <label for="milestoneCompleted" class="text-slate-700 font-medium cursor-pointer">이미 완료된 심사/제출 일정</label>
+        </div>
+
+        <div class="pt-2 flex justify-end gap-2">
+          <button type="button" onclick="closeMilestoneModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium">취소</button>
+          <button type="submit" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg">저장</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL: 연구 메모 추가 / 수정 (Note Modal) -->
+  <!-- ========================================== -->
+  <div id="noteModal" class="fixed inset-0 z-50 hidden bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6 border border-slate-200">
+      <div class="flex items-center justify-between mb-4">
+        <h3 id="noteModalTitle" class="text-base font-bold text-slate-900">연구 메모 작성</h3>
+        <button onclick="closeNoteModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+      </div>
+      <form id="noteForm" class="space-y-4 text-xs">
+        <input type="hidden" id="noteId">
+        
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">메모 제목 <span class="text-rose-500">*</span></label>
+          <input type="text" id="noteTitle" required placeholder="예: 지도교수님 3차 미팅 피드백 정리" class="w-full p-2.5 text-sm bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white">
+        </div>
+
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1">메모 내용 <span class="text-rose-500">*</span></label>
+          <textarea id="noteContent" required rows="4" placeholder="자유로운 생각, 논거, 떠오른 학술 질문 등" class="w-full p-2.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white"></textarea>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">관련 장</label>
+            <select id="noteChapter" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white text-xs">
+              <option value="">선택 안 함</option>
+              <!-- Filled dynamically -->
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1">태그 (쉼표 구분)</label>
+            <input type="text" id="noteTags" placeholder="예: 피드백, 통계, 고찰" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-hidden focus:bg-white text-xs">
+          </div>
+        </div>
+
+        <div class="pt-2 flex justify-end gap-2">
+          <button type="button" onclick="closeNoteModal()" class="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium">취소</button>
+          <button type="submit" class="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-semibold rounded-lg">저장</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    /* =========================================================================
+       1. FIREBASE CONFIGURATION
+       =========================================================================
+       사용자 여러분의 Firebase 콘솔(Realtime Database 활성화됨)에서 발급받은
+       설정값으로 아래를 교체하여 사용할 수 있습니다.
+       미입력 상태(YOUR_...)인 경우 브라우저 LocalStorage에 안전하게 자동 저장·동기화됩니다.
+    */
+    const firebaseConfig = {
+      apiKey: "AIzaSyCbVYqLykM1iMR95uKrqYyzCLeJdsCio1g",
+      authDomain: "my-thesis-analysis.firebaseapp.com",
+      databaseURL: "https://my-thesis-analysis-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "my-thesis-analysis",
+      storageBucket: "my-thesis-analysis.firebasestorage.app",
+      messagingSenderId: "523709826615",
+      appId: "1:523709826615:web:40423ddba8b1605dbd21b2",
+      measurementId: "G-1S6W23P5QT"
+    };
+
+    let fbApp = null;
+    let fbDb = null;
+    let isFirebaseReady = false;
+
+    // Firebase 초기화 확인
+    try {
+      if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes("YOUR_") && firebaseConfig.databaseURL && !firebaseConfig.databaseURL.includes("YOUR_")) {
+        fbApp = firebase.initializeApp(firebaseConfig);
+        fbDb = firebase.database();
+        isFirebaseReady = true;
+        console.log("Firebase Realtime Database가 성공적으로 연결되었습니다.");
+      } else {
+        console.info("Firebase 플레이스홀더 상태입니다. 로컬 스토리지 데이터 엔진으로 연동됩니다.");
+      }
+    } catch (e) {
+      console.warn("Firebase 초기화 예외:", e);
+      isFirebaseReady = false;
+    }
+
+    /* =========================================================================
+       2. GLOBAL APP STATE & USER DATA MODEL
+       =========================================================================
+    */
+    let currentUsername = "";
+    let appData = {
+      researchPlan: {},
+      references: {},
+      chapters: {},
+      writingLogs: {},
+      tasks: {},
+      milestones: {},
+      notes: {}
+    };
+
+    let activeFilter = "all"; // For task filtering
+    let writingChartInstance = null;
+    let writingLogChartInstance = null;
+
+    /* =========================================================================
+       3. NOTIFICATION & MODAL HELPERS
+       =========================================================================
+    */
+    function showToast(message, type = "success") {
+      const container = document.getElementById("toastContainer");
+      const toast = document.createElement("div");
+      toast.className = `pointer-events-auto flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-semibold shadow-lg border transition-all duration-300 transform translate-y-2 opacity-0 ${
+        type === "success" 
+          ? "bg-slate-900 text-white border-slate-800" 
+          : type === "error"
+          ? "bg-rose-600 text-white border-rose-700"
+          : "bg-amber-600 text-white border-amber-700"
+      }`;
+
+      const iconName = type === "success" ? "check-circle" : type === "error" ? "alert-circle" : "info";
+      toast.innerHTML = `<i data-lucide="${iconName}" class="w-4 h-4 shrink-0"></i><span>${message}</span>`;
+      container.appendChild(toast);
+      lucide.createIcons({ root: toast });
+
+      requestAnimationFrame(() => {
+        toast.classList.remove("translate-y-2", "opacity-0");
+      });
+
+      setTimeout(() => {
+        toast.classList.add("opacity-0", "translate-y-2");
+        setTimeout(() => toast.remove(), 300);
+      }, 3200);
+    }
+
+    function confirmDialog(title, message, callback) {
+      const modal = document.getElementById("confirmModal");
+      document.getElementById("confirmTitle").textContent = title;
+      document.getElementById("confirmMessage").textContent = message;
+      modal.classList.remove("hidden");
+
+      const confirmBtn = document.getElementById("confirmActionBtn");
+      const cancelBtn = document.getElementById("confirmCancelBtn");
+
+      const cleanup = () => {
+        modal.classList.add("hidden");
+        confirmBtn.onclick = null;
+        cancelBtn.onclick = null;
+      };
+
+      confirmBtn.onclick = () => {
+        cleanup();
+        callback();
+      };
+      cancelBtn.onclick = cleanup;
+    }
+
+    /* =========================================================================
+       4. DATA PERSISTENCE LAYER (Firebase DB or LocalStorage Fallback)
+       =========================================================================
+    */
+    // 안전한 사용자 키 생성 (특수기호 방지)
+    function sanitizeUserKey(name) {
+      return encodeURIComponent(name.trim().toLowerCase()).replace(/\./g, '_');
+    }
+
+    async function syncDataToDB(section, data) {
+      if (!currentUsername) return;
+      const safeKey = sanitizeUserKey(currentUsername);
+
+      // Local storage backup first
+      localStorage.setItem(`researchmate_${safeKey}_${section}`, JSON.stringify(data));
+
+      if (isFirebaseReady && fbDb) {
+        try {
+          await fbDb.ref(`users/${safeKey}/${section}`).set(data);
+        } catch (err) {
+          console.error(`Firebase 저장 실패 (${section}):`, err);
+          showToast("Firebase 동기화 오류 발생. 로컬에 저장되었습니다.", "error");
+        }
+      }
+    }
+
+    async function loadUserData(username) {
+      const safeKey = sanitizeUserKey(username);
+
+      if (isFirebaseReady && fbDb) {
+        try {
+          const snapshot = await fbDb.ref(`users/${safeKey}`).once('value');
+          const val = snapshot.val();
+          if (val) {
+            appData = {
+              researchPlan: val.researchPlan || {},
+              references: val.references || {},
+              chapters: val.chapters || {},
+              writingLogs: val.writingLogs || {},
+              tasks: val.tasks || {},
+              milestones: val.milestones || {},
+              notes: val.notes || {}
+            };
+            return;
+          }
+        } catch (e) {
+          console.warn("Firebase 로드 실패, 로컬 스토리지 확인:", e);
+        }
+      }
+
+      // Fallback: LocalStorage
+      const sections = ['researchPlan', 'references', 'chapters', 'writingLogs', 'tasks', 'milestones', 'notes'];
+      sections.forEach(sec => {
+        const stored = localStorage.getItem(`researchmate_${safeKey}_${sec}`);
+        appData[sec] = stored ? JSON.parse(stored) : {};
+      });
+    }
+
+    /* =========================================================================
+       5. AUTHENTICATION (Login / Logout)
+       =========================================================================
+    */
+    function initAuth() {
+      const storedUser = localStorage.getItem("researchmate_current_user");
+      if (storedUser) {
+        loginUser(storedUser);
+      } else {
+        showLoginScreen();
+      }
+
+      document.getElementById("loginForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        const usernameInput = document.getElementById("loginUsername").value.trim();
+        if (!usernameInput) {
+          showToast("사용자 이름을 입력해주세요.", "warning");
+          return;
+        }
+        loginUser(usernameInput);
+      });
+
+      document.getElementById("logoutBtn").addEventListener("click", () => {
+        logoutUser();
+      });
+    }
+
+    async function loginUser(name) {
+      currentUsername = name.trim();
+      localStorage.setItem("researchmate_current_user", currentUsername);
+
+      document.getElementById("loginScreen").classList.add("hidden");
+      document.getElementById("appContainer").classList.remove("hidden");
+
+      document.getElementById("currentUserName").textContent = currentUsername;
+      document.getElementById("dashResearcherName").textContent = currentUsername;
+      document.getElementById("userInitial").textContent = currentUsername.charAt(0).toUpperCase();
+
+      await loadUserData(currentUsername);
+
+      // Render all views
+      renderAll();
+      showToast(`${currentUsername} 연구자님, 환영합니다.`);
+      navigateView("dashboard");
+    }
+
+    function logoutUser() {
+      confirmDialog("로그아웃", "현재 연구 세션을 종료하고 로그아웃하시겠습니까?", () => {
+        localStorage.removeItem("researchmate_current_user");
+        currentUsername = "";
+        appData = {
+          researchPlan: {},
+          references: {},
+          chapters: {},
+          writingLogs: {},
+          tasks: {},
+          milestones: {},
+          notes: {}
+        };
+        document.getElementById("loginUsername").value = "";
+        document.getElementById("appContainer").classList.add("hidden");
+        document.getElementById("loginScreen").classList.remove("hidden");
+        showToast("로그아웃되었습니다.");
+      });
+    }
+
+    function showLoginScreen() {
+      document.getElementById("appContainer").classList.add("hidden");
+      document.getElementById("loginScreen").classList.remove("hidden");
+    }
+
+    /* =========================================================================
+       6. NAVIGATION & RESPONSIVE MENU
+       =========================================================================
+    */
+    function setupNavigation() {
+      const navButtons = document.querySelectorAll(".nav-item");
+      navButtons.forEach(btn => {
+        btn.addEventListener("click", () => {
+          const target = btn.getAttribute("data-target");
+          navigateView(target);
+          closeMobileSidebar();
+        });
+      });
+
+      // Mobile drawer
+      const mobileBtn = document.getElementById("mobileMenuBtn");
+      const sidebar = document.getElementById("sidebar");
+      const backdrop = document.getElementById("sidebarBackdrop");
+
+      mobileBtn.addEventListener("click", () => {
+        sidebar.classList.toggle("-translate-x-full");
+        backdrop.classList.toggle("hidden");
+      });
+
+      backdrop.addEventListener("click", closeMobileSidebar);
+    }
+
+    function closeMobileSidebar() {
+      const sidebar = document.getElementById("sidebar");
+      const backdrop = document.getElementById("sidebarBackdrop");
+      if (!sidebar.classList.contains("-translate-x-full")) {
+        sidebar.classList.add("-translate-x-full");
+      }
+      backdrop.classList.add("hidden");
+    }
+
+    function navigateView(viewName) {
+      document.querySelectorAll(".page-view").forEach(el => el.classList.add("hidden"));
+      const targetView = document.getElementById(`view-${viewName}`);
+      if (targetView) targetView.classList.remove("hidden");
+
+      document.querySelectorAll(".nav-item").forEach(btn => {
+        if (btn.getAttribute("data-target") === viewName) {
+          btn.classList.add("bg-slate-900", "text-white");
+          btn.classList.remove("text-slate-700", "hover:bg-slate-100");
+          const icon = btn.querySelector("i");
+          if (icon) icon.classList.remove("text-slate-500");
+        } else {
+          btn.classList.remove("bg-slate-900", "text-white");
+          btn.classList.add("text-slate-700", "hover:bg-slate-100");
+          const icon = btn.querySelector("i");
+          if (icon) icon.classList.add("text-slate-500");
+        }
+      });
+
+      if (viewName === "dashboard") {
+        updateDashboardView();
+      } else if (viewName === "writingLogs") {
+        renderWritingLogPageChart();
+      }
+      lucide.createIcons();
+    }
+
+    /* =========================================================================
+       7. RESEARCH PLAN MODULE
+       =========================================================================
+    */
+    function initResearchPlan() {
+      const form = document.getElementById("researchPlanForm");
+      const saveBtn = document.getElementById("savePlanBtn");
+
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        saveResearchPlan();
+      });
+
+      saveBtn.addEventListener("click", () => {
+        saveResearchPlan();
+      });
+    }
+
+    function populateResearchPlanForm() {
+      const plan = appData.researchPlan || {};
+      document.getElementById("planTitle").value = plan.title || "";
+      document.getElementById("planField").value = plan.field || "";
+      document.getElementById("planSubmissionDate").value = plan.submissionDate || "";
+      document.getElementById("planBackground").value = plan.background || "";
+      document.getElementById("planPurpose").value = plan.purpose || "";
+      document.getElementById("planQuestions").value = plan.questions || "";
+      document.getElementById("planTarget").value = plan.target || "";
+      document.getElementById("planScope").value = plan.scope || "";
+      document.getElementById("planMethod").value = plan.method || "";
+      document.getElementById("planVariables").value = plan.variables || "";
+      document.getElementById("planSignificance").value = plan.significance || "";
+      document.getElementById("planExpectedResults").value = plan.expectedResults || "";
+      document.getElementById("planContribution").value = plan.contribution || "";
+
+      updateSubmissionCountdown();
+    }
+
+    async function saveResearchPlan() {
+      const title = document.getElementById("planTitle").value.trim();
+      const submissionDate = document.getElementById("planSubmissionDate").value;
+
+      appData.researchPlan = {
+        title: title,
+        field: document.getElementById("planField").value.trim(),
+        submissionDate: submissionDate,
+        background: document.getElementById("planBackground").value.trim(),
+        purpose: document.getElementById("planPurpose").value.trim(),
+        questions: document.getElementById("planQuestions").value.trim(),
+        target: document.getElementById("planTarget").value.trim(),
+        scope: document.getElementById("planScope").value.trim(),
+        method: document.getElementById("planMethod").value.trim(),
+        variables: document.getElementById("planVariables").value.trim(),
+        significance: document.getElementById("planSignificance").value.trim(),
+        expectedResults: document.getElementById("planExpectedResults").value.trim(),
+        contribution: document.getElementById("planContribution").value.trim(),
+        updatedAt: new Date().toISOString()
+      };
+
+      await syncDataToDB("researchPlan", appData.researchPlan);
+      showToast("연구계획이 저장되었습니다.");
+      updateSubmissionCountdown();
+    }
+
+    function updateSubmissionCountdown() {
+      const subDate = appData.researchPlan?.submissionDate;
+      const headerChip = document.getElementById("headerCountdownChip");
+      const headerText = document.getElementById("headerCountdownText");
+      const dashNumber = document.getElementById("dashCountdownNumber");
+
+      if (!subDate) {
+        headerText.textContent = "제출일 미정";
+        dashNumber.textContent = "일정 미지정";
+        return;
+      }
+
+      const today = new Date();
+      today.setHours(0,0,0,0);
+      const target = new Date(subDate);
+      target.setHours(0,0,0,0);
+
+      const diffTime = target - today;
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+      if (diffDays > 0) {
+        headerText.textContent = `제출까지 D-${diffDays}일`;
+        dashNumber.innerHTML = `논문 제출까지 <span class="text-rose-600">${diffDays}일</span> 남았습니다`;
+        headerChip.classList.remove("bg-rose-50", "text-rose-800", "border-rose-200");
+        headerChip.classList.add("bg-amber-50", "text-amber-800", "border-amber-200");
+      } else if (diffDays === 0) {
+        headerText.textContent = "논문 제출 D-Day!";
+        dashNumber.innerHTML = `<span class="text-rose-600 font-black">오늘이 바로 논문 제출일입니다!</span>`;
+      } else {
+        const passedDays = Math.abs(diffDays);
+        headerText.textContent = `제출 기한 +${passedDays}일 경과`;
+        dashNumber.innerHTML = `제출 예정일로부터 <span class="text-slate-500">${passedDays}일 지남</span>`;
+        headerChip.classList.remove("bg-amber-50", "text-amber-800", "border-amber-200");
+        headerChip.classList.add("bg-rose-50", "text-rose-800", "border-rose-200");
+      }
+    }
+
+    /* =========================================================================
+       8. CHAPTERS & SECTIONS (PROGRESS) MODULE
+       =========================================================================
+    */
+    function initChaptersModule() {
+      document.getElementById("openAddChapterModalBtn").addEventListener("click", () => {
+        openChapterModal();
+      });
+
+      document.getElementById("chapterForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        saveChapter();
+      });
+
+      document.getElementById("sectionForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        saveSection();
+      });
+    }
+
+    function openChapterModal(chapterId = null) {
+      const modal = document.getElementById("chapterModal");
+      const titleEl = document.getElementById("chapterModalTitle");
+      const idInput = document.getElementById("modalChapterId");
+      const nameInput = document.getElementById("modalChapterTitle");
+      const memoInput = document.getElementById("modalChapterMemo");
+
+      if (chapterId && appData.chapters[chapterId]) {
+        titleEl.textContent = "장(Chapter) 수정";
+        idInput.value = chapterId;
+        nameInput.value = appData.chapters[chapterId].title || "";
+        memoInput.value = appData.chapters[chapterId].memo || "";
+      } else {
+        titleEl.textContent = "새 장(Chapter) 추가";
+        idInput.value = "";
+        nameInput.value = "";
+        memoInput.value = "";
+      }
+      modal.classList.remove("hidden");
+    }
+
+    function closeChapterModal() {
+      document.getElementById("chapterModal").classList.add("hidden");
+    }
+
+    async function saveChapter() {
+      const idInput = document.getElementById("modalChapterId").value;
+      const title = document.getElementById("modalChapterTitle").value.trim();
+      const memo = document.getElementById("modalChapterMemo").value.trim();
+
+      const chapterId = idInput || `chap_${Date.now()}`;
+
+      if (!appData.chapters) appData.chapters = {};
+
+      if (idInput && appData.chapters[idInput]) {
+        appData.chapters[idInput].title = title;
+        appData.chapters[idInput].memo = memo;
+      } else {
+        appData.chapters[chapterId] = {
+          id: chapterId,
+          title: title,
+          memo: memo,
+          order: Object.keys(appData.chapters).length + 1,
+          sections: {}
+        };
+      }
+
+      await syncDataToDB("chapters", appData.chapters);
+      closeChapterModal();
+      renderChapters();
+      updateChapterSelectDropdowns();
+      showToast("장이 저장되었습니다.");
+    }
+
+    function deleteChapter(chapterId) {
+      confirmDialog("장 삭제", "이 장과 하위 절 및 연결 정보가 모두 삭제됩니다. 계속하시겠습니까?", async () => {
+        delete appData.chapters[chapterId];
+        await syncDataToDB("chapters", appData.chapters);
+        renderChapters();
+        updateChapterSelectDropdowns();
+        showToast("삭제되었습니다.");
+      });
+    }
+
+    function openSectionModal(chapterId, sectionId = null) {
+      const modal = document.getElementById("sectionModal");
+      const titleEl = document.getElementById("sectionModalTitle");
+      document.getElementById("modalSecChapterId").value = chapterId;
+      document.getElementById("modalSecId").value = sectionId || "";
+
+      if (sectionId && appData.chapters[chapterId]?.sections?.[sectionId]) {
+        titleEl.textContent = "절(Section) 수정";
+        const sec = appData.chapters[chapterId].sections[sectionId];
+        document.getElementById("modalSecTitle").value = sec.title || "";
+        document.getElementById("modalSecStatus").value = sec.status || "미작성";
+        document.getElementById("modalSecTargetChars").value = sec.targetChars || "";
+        document.getElementById("modalSecCurrentChars").value = sec.currentChars || "";
+        document.getElementById("modalSecDeadline").value = sec.deadline || "";
+        document.getElementById("modalSecMemo").value = sec.memo || "";
+      } else {
+        titleEl.textContent = "절(Section) 추가";
+        document.getElementById("modalSecTitle").value = "";
+        document.getElementById("modalSecStatus").value = "미작성";
+        document.getElementById("modalSecTargetChars").value = "";
+        document.getElementById("modalSecCurrentChars").value = "";
+        document.getElementById("modalSecDeadline").value = "";
+        document.getElementById("modalSecMemo").value = "";
+      }
+
+      modal.classList.remove("hidden");
+    }
+
+    function closeSectionModal() {
+      document.getElementById("sectionModal").classList.add("hidden");
+    }
+
+    async function saveSection() {
+      const chapId = document.getElementById("modalSecChapterId").value;
+      const secId = document.getElementById("modalSecId").value || `sec_${Date.now()}`;
+      const title = document.getElementById("modalSecTitle").value.trim();
+      const status = document.getElementById("modalSecStatus").value;
+      const targetChars = parseInt(document.getElementById("modalSecTargetChars").value) || 0;
+      const currentChars = parseInt(document.getElementById("modalSecCurrentChars").value) || 0;
+      const deadline = document.getElementById("modalSecDeadline").value;
+      const memo = document.getElementById("modalSecMemo").value.trim();
+
+      if (!appData.chapters[chapId].sections) {
+        appData.chapters[chapId].sections = {};
+      }
+
+      appData.chapters[chapId].sections[secId] = {
+        id: secId,
+        title: title,
+        status: status,
+        targetChars: targetChars,
+        currentChars: currentChars,
+        deadline: deadline,
+        memo: memo,
+        updatedAt: new Date().toISOString()
+      };
+
+      await syncDataToDB("chapters", appData.chapters);
+      closeSectionModal();
+      renderChapters();
+      showToast("절이 저장되었습니다.");
+    }
+
+    function deleteSection(chapId, secId) {
+      confirmDialog("절 삭제", "해당 절을 삭제하시겠습니까?", async () => {
+        if (appData.chapters[chapId]?.sections?.[secId]) {
+          delete appData.chapters[chapId].sections[secId];
+          await syncDataToDB("chapters", appData.chapters);
+          renderChapters();
+          showToast("삭제되었습니다.");
+        }
+      });
+    }
+
+    // Status to percentage conversion mapping
+    const STATUS_WEIGHT = {
+      "미작성": 0,
+      "작성 중": 25,
+      "초안 완료": 50,
+      "수정 중": 75,
+      "완료": 100
+    };
+
+    function calculateChapterProgress(chapter) {
+      const sections = Object.values(chapter.sections || {});
+      if (sections.length === 0) return 0;
+      const totalScore = sections.reduce((acc, sec) => acc + (STATUS_WEIGHT[sec.status] || 0), 0);
+      return Math.round(totalScore / sections.length);
+    }
+
+    function calculateOverallProgress() {
+      const chapters = Object.values(appData.chapters || {});
+      if (chapters.length === 0) return 0;
+      let totalSecCount = 0;
+      let totalSecScore = 0;
+
+      chapters.forEach(chap => {
+        const sections = Object.values(chap.sections || {});
+        sections.forEach(sec => {
+          totalSecCount++;
+          totalSecScore += (STATUS_WEIGHT[sec.status] || 0);
+        });
+      });
+
+      if (totalSecCount === 0) return 0;
+      return Math.round(totalSecScore / totalSecCount);
+    }
+
+    function renderChapters() {
+      const container = document.getElementById("chaptersHierarchyContainer");
+      const overallPercent = calculateOverallProgress();
+
+      // Update progress visuals
+      document.getElementById("chaptersOverallPercent").textContent = `${overallPercent}%`;
+      document.getElementById("chaptersOverallBar").style.width = `${overallPercent}%`;
+      document.getElementById("sidebarProgressText").textContent = `${overallPercent}%`;
+      document.getElementById("sidebarProgressBar").style.width = `${overallPercent}%`;
+      document.getElementById("statProgress").textContent = `${overallPercent}%`;
+      document.getElementById("statProgressBar").style.width = `${overallPercent}%`;
+
+      const chapKeys = Object.keys(appData.chapters || {});
+
+      if (chapKeys.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-12 bg-white border border-dashed border-slate-300 rounded-xl">
+            <i data-lucide="book-open" class="w-10 h-10 text-slate-300 mx-auto mb-3"></i>
+            <h4 class="text-sm font-bold text-slate-700">아직 등록된 장(목차)이 없습니다.</h4>
+            <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+              상단의 "+ 새 장 추가" 버튼을 눌러 논문의 목차 구조를 직접 설계해보세요.
+            </p>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = chapKeys.map(chapId => {
+        const chap = appData.chapters[chapId];
+        const progress = calculateChapterProgress(chap);
+        const sections = Object.values(chap.sections || {});
+
+        // Connected references count for this chapter
+        const connectedRefs = Object.values(appData.references || {}).filter(r => r.targetChapter === chap.title || r.targetChapter === chapId);
+
+        return `
+          <div class="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+            <!-- Chapter Header -->
+            <div class="p-4 sm:p-5 bg-slate-50/70 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div class="flex-1">
+                <div class="flex items-center gap-2">
+                  <h3 class="text-base font-bold text-slate-900">${escapeHtml(chap.title)}</h3>
+                  <span class="text-xs px-2 py-0.5 rounded-full font-bold ${
+                    progress === 100 ? 'bg-emerald-100 text-emerald-800' : progress > 0 ? 'bg-slate-200 text-slate-800' : 'bg-slate-100 text-slate-500'
+                  }">${progress}%</span>
+                </div>
+                ${chap.memo ? `<p class="text-xs text-slate-500 mt-1">${escapeHtml(chap.memo)}</p>` : ''}
+              </div>
+
+              <div class="flex items-center gap-2 self-end sm:self-center">
+                <button onclick="openSectionModal('${chapId}')" class="px-3 py-1.5 text-xs font-semibold text-slate-800 bg-white border border-slate-300 hover:bg-slate-50 rounded-lg flex items-center gap-1 shadow-2xs">
+                  <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                  <span>절 추가</span>
+                </button>
+                <button onclick="openChapterModal('${chapId}')" class="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-md" title="장 수정">
+                  <i data-lucide="edit-2" class="w-4 h-4"></i>
+                </button>
+                <button onclick="deleteChapter('${chapId}')" class="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md" title="장 삭제">
+                  <i data-lucide="trash-2" class="w-4 h-4"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Chapter Progress Bar -->
+            <div class="w-full bg-slate-200 h-1.5">
+              <div class="bg-slate-900 h-1.5 transition-all duration-300" style="width: ${progress}%"></div>
+            </div>
+
+            <!-- Sections List -->
+            <div class="p-4 sm:p-5 space-y-3">
+              ${sections.length === 0 ? `
+                <div class="text-xs text-slate-400 py-3 text-center border border-dashed border-slate-200 rounded-lg">
+                  등록된 절이 없습니다. 우측 상단의 '+ 절 추가' 버튼을 눌러 소절을 등록하세요.
+                </div>
+              ` : `
+                <div class="space-y-2">
+                  ${sections.map(sec => {
+                    const statusColors = {
+                      "미작성": "bg-slate-100 text-slate-600 border-slate-200",
+                      "작성 중": "bg-blue-50 text-blue-700 border-blue-200",
+                      "초안 완료": "bg-amber-50 text-amber-700 border-amber-200",
+                      "수정 중": "bg-purple-50 text-purple-700 border-purple-200",
+                      "완료": "bg-emerald-50 text-emerald-800 border-emerald-200"
+                    };
+                    const badgeClass = statusColors[sec.status] || "bg-slate-100 text-slate-600";
+
+                    return `
+                      <div class="p-3 bg-slate-50/60 hover:bg-slate-50 border border-slate-200 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition">
+                        <div class="flex-1 min-w-0">
+                          <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-xs font-bold text-slate-800 truncate">${escapeHtml(sec.title)}</span>
+                            <span class="text-[10px] font-semibold px-2 py-0.5 rounded border ${badgeClass}">${sec.status}</span>
+                            ${sec.deadline ? `<span class="text-[11px] text-slate-400">목표: ${sec.deadline}</span>` : ''}
+                          </div>
+                          <div class="flex items-center gap-3 text-[11px] text-slate-500 mt-1">
+                            <span>글자수: <strong class="text-slate-700">${(sec.currentChars || 0).toLocaleString()}</strong> / ${(sec.targetChars || 0).toLocaleString()}자</span>
+                            ${sec.memo ? `<span class="text-slate-400 truncate">| ${escapeHtml(sec.memo)}</span>` : ''}
+                          </div>
+                        </div>
+
+                        <div class="flex items-center gap-1.5 self-end sm:self-center shrink-0">
+                          <button onclick="openSectionModal('${chapId}', '${sec.id}')" class="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded" title="절 수정">
+                            <i data-lucide="edit" class="w-3.5 h-3.5"></i>
+                          </button>
+                          <button onclick="deleteSection('${chapId}', '${sec.id}')" class="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded" title="절 삭제">
+                            <i data-lucide="trash" class="w-3.5 h-3.5"></i>
+                          </button>
+                        </div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              `}
+
+              <!-- Connected References Section for Chapter -->
+              <div class="mt-4 pt-3 border-t border-slate-100">
+                <div class="flex items-center justify-between text-xs text-slate-500 mb-2">
+                  <span class="font-semibold flex items-center gap-1">
+                    <i data-lucide="bookmark" class="w-3.5 h-3.5 text-slate-400"></i>
+                    이 장과 연결된 참고문헌 (${connectedRefs.length}편)
+                  </span>
+                </div>
+                ${connectedRefs.length === 0 ? `
+                  <p class="text-[11px] text-slate-400">연결된 문헌이 없습니다. 문헌 관리에서 '활용 예정 장'으로 지정할 수 있습니다.</p>
+                ` : `
+                  <div class="flex flex-wrap gap-1.5">
+                    ${connectedRefs.map(r => `
+                      <span onclick="openRefDetailModal('${r.id}')" class="cursor-pointer text-[11px] bg-slate-100 hover:bg-slate-200 border border-slate-200 px-2.5 py-1 rounded-md text-slate-700 flex items-center gap-1.5 transition">
+                        <i data-lucide="file-text" class="w-3 h-3 text-slate-400"></i>
+                        <span class="font-medium truncate max-w-[200px]">${escapeHtml(r.authors)} (${r.year})</span>
+                      </span>
+                    `).join('')}
+                  </div>
+                `}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    function updateChapterSelectDropdowns() {
+      const dropdownIds = ["refTargetChapter", "refFilterChapter", "taskChapter", "noteChapter"];
+      const chapters = Object.values(appData.chapters || {});
+
+      dropdownIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const currentVal = el.value;
+
+        let defaultLabel = id.includes("Filter") ? "전체 장" : (id === "taskChapter" || id === "noteChapter" ? "선택 안 함" : "미지정");
+        el.innerHTML = `<option value="">${defaultLabel}</option>`;
+
+        chapters.forEach(c => {
+          const opt = document.createElement("option");
+          opt.value = c.title;
+          opt.textContent = c.title;
+          if (c.title === currentVal) opt.selected = true;
+          el.appendChild(opt);
+        });
+      });
+    }
+
+    /* =========================================================================
+       9. REFERENCES MANAGEMENT MODULE (CRUD, Search & Filter)
+       =========================================================================
+    */
+    function initReferencesModule() {
+      document.getElementById("openAddRefModalBtn").addEventListener("click", () => {
+        openRefModal();
+      });
+
+      document.getElementById("refForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        saveReference();
+      });
+
+      // Filter and search listeners
+      const filterInputs = ["refSearchInput", "refFilterYear", "refFilterType", "refFilterReadStatus", "refFilterImportance", "refFilterChapter", "refSortOrder"];
+      filterInputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+          el.addEventListener("input", renderReferences);
+          el.addEventListener("change", renderReferences);
+        }
+      });
+
+      document.getElementById("resetRefFilterBtn").addEventListener("click", () => {
+        document.getElementById("refSearchInput").value = "";
+        document.getElementById("refFilterYear").value = "";
+        document.getElementById("refFilterType").value = "";
+        document.getElementById("refFilterReadStatus").value = "";
+        document.getElementById("refFilterImportance").value = "";
+        document.getElementById("refFilterChapter").value = "";
+        document.getElementById("refSortOrder").value = "created_desc";
+        renderReferences();
+      });
+    }
+
+    function openRefModal(refId = null) {
+      updateChapterSelectDropdowns();
+      const modal = document.getElementById("refModal");
+      const titleEl = document.getElementById("refModalTitle");
+
+      if (refId && appData.references[refId]) {
+        titleEl.textContent = "참고문헌 수정";
+        const r = appData.references[refId];
+        document.getElementById("refId").value = refId;
+        document.getElementById("refTitle").value = r.title || "";
+        document.getElementById("refAuthors").value = r.authors || "";
+        document.getElementById("refYear").value = r.year || "";
+        document.getElementById("refType").value = r.type || "학술논문";
+        document.getElementById("refPublication").value = r.publication || "";
+        document.getElementById("refUrl").value = r.url || "";
+        document.getElementById("refLanguage").value = r.language || "한국어";
+        document.getElementById("refReadStatus").value = r.readStatus || "읽지 않음";
+        document.getElementById("refImportance").value = r.importance || "보통";
+        document.getElementById("refTargetChapter").value = r.targetChapter || "";
+
+        // Research analysis fields
+        document.getElementById("refPurpose").value = r.purpose || "";
+        document.getElementById("refBackground").value = r.background || "";
+        document.getElementById("refTarget").value = r.target || "";
+        document.getElementById("refPeriod").value = r.period || "";
+        document.getElementById("refMethod").value = r.method || "";
+        document.getElementById("refIv").value = r.iv || "";
+        document.getElementById("refDv").value = r.dv || "";
+        document.getElementById("refMed").value = r.med || "";
+        document.getElementById("refMod").value = r.mod || "";
+        document.getElementById("refResults").value = r.results || "";
+        document.getElementById("refLimitations").value = r.limitations || "";
+
+        // Thesis connection
+        document.getElementById("refRelevance").value = r.relevance || "";
+        document.getElementById("refUsePart").value = r.usePart || "";
+        document.getElementById("refPages").value = r.pages || "";
+        document.getElementById("refKeywords").value = r.keywords || "";
+        document.getElementById("refQuote").value = r.quote || "";
+      } else {
+        titleEl.textContent = "참고문헌 등록";
+        document.getElementById("refForm").reset();
+        document.getElementById("refId").value = "";
+        document.getElementById("refYear").value = new Date().getFullYear();
+        document.getElementById("refLanguage").value = "한국어";
+        document.getElementById("refImportance").value = "보통";
+        document.getElementById("refReadStatus").value = "읽지 않음";
+      }
+
+      modal.classList.remove("hidden");
+    }
+
+    function closeRefModal() {
+      document.getElementById("refModal").classList.add("hidden");
+    }
+
+    async function saveReference() {
+      const refId = document.getElementById("refId").value || `ref_${Date.now()}`;
+      
+      const newRef = {
+        id: refId,
+        title: document.getElementById("refTitle").value.trim(),
+        authors: document.getElementById("refAuthors").value.trim(),
+        year: parseInt(document.getElementById("refYear").value) || new Date().getFullYear(),
+        type: document.getElementById("refType").value,
+        publication: document.getElementById("refPublication").value.trim(),
+        url: document.getElementById("refUrl").value.trim(),
+        language: document.getElementById("refLanguage").value,
+        readStatus: document.getElementById("refReadStatus").value,
+        importance: document.getElementById("refImportance").value,
+        targetChapter: document.getElementById("refTargetChapter").value,
+        purpose: document.getElementById("refPurpose").value.trim(),
+        background: document.getElementById("refBackground").value.trim(),
+        target: document.getElementById("refTarget").value.trim(),
+        period: document.getElementById("refPeriod").value.trim(),
+        method: document.getElementById("refMethod").value.trim(),
+        iv: document.getElementById("refIv").value.trim(),
+        dv: document.getElementById("refDv").value.trim(),
+        med: document.getElementById("refMed").value.trim(),
+        mod: document.getElementById("refMod").value.trim(),
+        results: document.getElementById("refResults").value.trim(),
+        limitations: document.getElementById("refLimitations").value.trim(),
+        relevance: document.getElementById("refRelevance").value.trim(),
+        usePart: document.getElementById("refUsePart").value.trim(),
+        pages: document.getElementById("refPages").value.trim(),
+        keywords: document.getElementById("refKeywords").value.trim(),
+        quote: document.getElementById("refQuote").value.trim(),
+        updatedAt: new Date().toISOString(),
+        createdAt: appData.references[refId]?.createdAt || new Date().toISOString()
+      };
+
+      if (!appData.references) appData.references = {};
+      appData.references[refId] = newRef;
+
+      await syncDataToDB("references", appData.references);
+      closeRefModal();
+      populateYearFilter();
+      renderReferences();
+      renderChapters();
+      showToast("참고문헌이 저장되었습니다.");
+    }
+
+    function deleteReference(refId) {
+      confirmDialog("문헌 삭제", "이 문헌 정보를 삭제하시겠습니까?", async () => {
+        if (appData.references[refId]) {
+          delete appData.references[refId];
+          await syncDataToDB("references", appData.references);
+          renderReferences();
+          renderChapters();
+          showToast("삭제되었습니다.");
+        }
+      });
+    }
+
+    function populateYearFilter() {
+      const yearSelect = document.getElementById("refFilterYear");
+      const currentVal = yearSelect.value;
+      const years = new Set();
+      Object.values(appData.references || {}).forEach(r => {
+        if (r.year) years.add(r.year);
+      });
+      const sortedYears = Array.from(years).sort((a,b) => b - a);
+
+      yearSelect.innerHTML = `<option value="">전체 연도</option>`;
+      sortedYears.forEach(y => {
+        const opt = document.createElement("option");
+        opt.value = y;
+        opt.textContent = `${y}년`;
+        if (y.toString() === currentVal) opt.selected = true;
+        yearSelect.appendChild(opt);
+      });
+    }
+
+    function renderReferences() {
+      const container = document.getElementById("referencesContainer");
+      const query = (document.getElementById("refSearchInput").value || "").toLowerCase().trim();
+      const filterYear = document.getElementById("refFilterYear").value;
+      const filterType = document.getElementById("refFilterType").value;
+      const filterReadStatus = document.getElementById("refFilterReadStatus").value;
+      const filterImportance = document.getElementById("refFilterImportance").value;
+      const filterChapter = document.getElementById("refFilterChapter").value;
+      const sortOrder = document.getElementById("refSortOrder").value;
+
+      let list = Object.values(appData.references || {});
+
+      // Filter matching
+      if (query) {
+        list = list.filter(r => {
+          return (r.title && r.title.toLowerCase().includes(query)) ||
+                 (r.authors && r.authors.toLowerCase().includes(query)) ||
+                 (r.keywords && r.keywords.toLowerCase().includes(query)) ||
+                 (r.method && r.method.toLowerCase().includes(query)) ||
+                 (r.results && r.results.toLowerCase().includes(query)) ||
+                 (r.relevance && r.relevance.toLowerCase().includes(query));
+        });
+      }
+
+      if (filterYear) list = list.filter(r => r.year && r.year.toString() === filterYear);
+      if (filterType) list = list.filter(r => r.type === filterType);
+      if (filterReadStatus) list = list.filter(r => r.readStatus === filterReadStatus);
+      if (filterImportance) list = list.filter(r => r.importance === filterImportance);
+      if (filterChapter) list = list.filter(r => r.targetChapter === filterChapter);
+
+      // Sort
+      const importanceWeight = { "높음": 3, "보통": 2, "낮음": 1 };
+      list.sort((a, b) => {
+        if (sortOrder === "created_desc") return new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
+        if (sortOrder === "created_asc") return new Date(a.createdAt || 0) - new Date(b.createdAt || 0);
+        if (sortOrder === "year_desc") return (b.year || 0) - (a.year || 0);
+        if (sortOrder === "year_asc") return (a.year || 0) - (b.year || 0);
+        if (sortOrder === "importance_desc") return (importanceWeight[b.importance] || 0) - (importanceWeight[a.importance] || 0);
+        return 0;
+      });
+
+      document.getElementById("refCountDisplay").textContent = list.length;
+
+      // Update stat cards
+      const allRefs = Object.values(appData.references || {});
+      document.getElementById("statRefTotal").textContent = allRefs.length;
+      document.getElementById("statRefRead").textContent = allRefs.filter(r => r.readStatus === "읽음").length;
+      document.getElementById("statRefReading").textContent = allRefs.filter(r => r.readStatus === "읽는 중").length;
+
+      if (list.length === 0) {
+        if (allRefs.length === 0) {
+          container.innerHTML = `
+            <div class="text-center py-16 bg-white border border-dashed border-slate-300 rounded-xl">
+              <i data-lucide="book-open-check" class="w-12 h-12 text-slate-300 mx-auto mb-3"></i>
+              <h4 class="text-sm font-bold text-slate-700">아직 등록된 문헌이 없습니다.</h4>
+              <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                '+ 문헌 추가' 버튼을 눌러 첫 번째 논문이나 도서를 등록해보세요.
+              </p>
+            </div>
+          `;
+        } else {
+          container.innerHTML = `
+            <div class="text-center py-12 bg-white border border-slate-200 rounded-xl text-slate-500 text-xs">
+              조건에 일치하는 문헌 검색 결과가 없습니다.
+            </div>
+          `;
+        }
+        lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = list.map(ref => {
+        const readStatusBadge = {
+          "읽음": "bg-emerald-50 text-emerald-800 border-emerald-200",
+          "읽는 중": "bg-blue-50 text-blue-800 border-blue-200",
+          "읽지 않음": "bg-slate-100 text-slate-600 border-slate-200"
+        }[ref.readStatus] || "bg-slate-100 text-slate-600 border-slate-200";
+
+        const importanceBadge = {
+          "높음": "text-rose-600 font-bold",
+          "보통": "text-slate-600 font-medium",
+          "낮음": "text-slate-400"
+        }[ref.importance] || "text-slate-600";
+
+        const keywordsArray = (ref.keywords || "").split(",").map(k => k.trim()).filter(Boolean);
+
+        return `
+          <div class="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-xs hover:border-slate-300 transition">
+            <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap mb-1.5">
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200">${escapeHtml(ref.type)}</span>
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded border ${readStatusBadge}">${ref.readStatus}</span>
+                  <span class="text-[11px] ${importanceBadge}">중요도: ${ref.importance}</span>
+                  ${ref.targetChapter ? `<span class="text-[10px] font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600"><i data-lucide="bookmark" class="w-3 h-3 inline mr-1"></i>${escapeHtml(ref.targetChapter)}</span>` : ''}
+                </div>
+
+                <h3 class="text-sm sm:text-base font-bold text-slate-900 leading-snug cursor-pointer hover:text-slate-700" onclick="openRefDetailModal('${ref.id}')">
+                  ${escapeHtml(ref.title)}
+                </h3>
+
+                <p class="text-xs text-slate-500 mt-1">
+                  <strong class="font-semibold text-slate-700">${escapeHtml(ref.authors)}</strong> (${ref.year})
+                  ${ref.publication ? ` • <span class="italic text-slate-600">${escapeHtml(ref.publication)}</span>` : ''}
+                </p>
+
+                ${ref.relevance ? `
+                  <div class="mt-2 text-xs bg-slate-50 p-2.5 rounded-lg border border-slate-200/70 text-slate-700 line-clamp-2">
+                    <span class="font-bold text-slate-900">[내 논문 관련성]</span> ${escapeHtml(ref.relevance)}
+                  </div>
+                ` : ''}
+
+                ${keywordsArray.length > 0 ? `
+                  <div class="flex flex-wrap gap-1 mt-2.5">
+                    ${keywordsArray.map(kw => `<span class="text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600">#${escapeHtml(kw)}</span>`).join('')}
+                  </div>
+                ` : ''}
+              </div>
+
+              <!-- Action buttons -->
+              <div class="flex sm:flex-col items-center gap-1.5 shrink-0 self-end sm:self-start pt-2 sm:pt-0">
+                <button onclick="openRefDetailModal('${ref.id}')" class="px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg flex items-center gap-1">
+                  <i data-lucide="eye" class="w-3.5 h-3.5"></i>
+                  <span>상세보기</span>
+                </button>
+                <button onclick="openRefModal('${ref.id}')" class="px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 border border-slate-200 rounded-lg flex items-center gap-1">
+                  <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+                  <span>수정</span>
+                </button>
+                <button onclick="deleteReference('${ref.id}')" class="px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-lg flex items-center gap-1">
+                  <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                  <span>삭제</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    function openRefDetailModal(refId) {
+      const ref = appData.references[refId];
+      if (!ref) return;
+
+      document.getElementById("detailRefTitle").textContent = ref.title;
+      document.getElementById("detailRefTypeBadge").textContent = ref.type || "학술논문";
+      document.getElementById("detailRefDate").textContent = `등록일: ${ref.createdAt ? ref.createdAt.substring(0, 10) : '-'}`;
+
+      document.getElementById("detailEditBtn").onclick = () => {
+        closeRefDetailModal();
+        openRefModal(refId);
+      };
+
+      const body = document.getElementById("detailRefBody");
+      body.innerHTML = `
+        <!-- Meta info box -->
+        <div class="bg-slate-50 p-3.5 rounded-lg border border-slate-200 space-y-1.5">
+          <div><strong class="text-slate-900">저자:</strong> ${escapeHtml(ref.authors || '-')}</div>
+          <div><strong class="text-slate-900">발행연도:</strong> ${ref.year || '-'}년</div>
+          <div><strong class="text-slate-900">학술지/학교:</strong> ${escapeHtml(ref.publication || '-')}</div>
+          <div><strong class="text-slate-900">읽기 상태:</strong> ${ref.readStatus || '-'} | <strong class="text-slate-900">중요도:</strong> ${ref.importance || '-'}</div>
+          <div><strong class="text-slate-900">활용 예정 장:</strong> ${escapeHtml(ref.targetChapter || '미지정')}</div>
+          ${ref.url ? `<div><strong class="text-slate-900">DOI/URL:</strong> <a href="${escapeHtml(ref.url)}" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline break-all">${escapeHtml(ref.url)}</a></div>` : ''}
+          ${ref.keywords ? `<div><strong class="text-slate-900">키워드:</strong> ${escapeHtml(ref.keywords)}</div>` : ''}
+          ${ref.pages ? `<div><strong class="text-slate-900">중요 페이지:</strong> ${escapeHtml(ref.pages)}</div>` : ''}
+        </div>
+
+        <!-- Research Content Analysis -->
+        <div class="space-y-3">
+          <h4 class="font-bold text-slate-900 text-xs border-b border-slate-200 pb-1">연구 내용 분석</h4>
+          
+          ${ref.purpose ? `<div><span class="font-semibold text-slate-800">■ 연구 목적:</span> <p class="text-slate-600 mt-0.5 whitespace-pre-wrap">${escapeHtml(ref.purpose)}</p></div>` : ''}
+          ${ref.background ? `<div><span class="font-semibold text-slate-800">■ 연구 배경:</span> <p class="text-slate-600 mt-0.5 whitespace-pre-wrap">${escapeHtml(ref.background)}</p></div>` : ''}
+          
+          <div class="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 rounded border border-slate-200">
+            <div><strong>연구 대상:</strong> ${escapeHtml(ref.target || '-')}</div>
+            <div><strong>연구 기간:</strong> ${escapeHtml(ref.period || '-')}</div>
+            <div class="col-span-2"><strong>연구 방법:</strong> ${escapeHtml(ref.method || '-')}</div>
+          </div>
+
+          ${(ref.iv || ref.dv || ref.med || ref.mod) ? `
+            <div class="p-2.5 bg-slate-50 rounded border border-slate-200 text-slate-600 space-y-1">
+              <div><strong>독립변수(IV):</strong> ${escapeHtml(ref.iv || '-')}</div>
+              <div><strong>종속변수(DV):</strong> ${escapeHtml(ref.dv || '-')}</div>
+              <div><strong>매개변수:</strong> ${escapeHtml(ref.med || '-')} | <strong>조절변수:</strong> ${escapeHtml(ref.mod || '-')}</div>
+            </div>
+          ` : ''}
+
+          ${ref.results ? `<div><span class="font-semibold text-slate-800">■ 주요 연구 결과:</span> <p class="text-slate-600 mt-0.5 whitespace-pre-wrap">${escapeHtml(ref.results)}</p></div>` : ''}
+          ${ref.limitations ? `<div><span class="font-semibold text-slate-800">■ 연구의 한계점:</span> <p class="text-slate-600 mt-0.5 whitespace-pre-wrap">${escapeHtml(ref.limitations)}</p></div>` : ''}
+        </div>
+
+        <!-- Connection to My Thesis -->
+        <div class="space-y-3 border-t border-slate-200 pt-3">
+          <h4 class="font-bold text-slate-900 text-xs border-b border-slate-200 pb-1">내 논문과의 연계</h4>
+          ${ref.relevance ? `<div><span class="font-semibold text-slate-800">■ 내 논문과의 관련성:</span> <p class="text-slate-600 mt-0.5 whitespace-pre-wrap">${escapeHtml(ref.relevance)}</p></div>` : ''}
+          ${ref.usePart ? `<div><span class="font-semibold text-slate-800">■ 내 논문에서 사용할 부분:</span> <p class="text-slate-600 mt-0.5 whitespace-pre-wrap">${escapeHtml(ref.usePart)}</p></div>` : ''}
+          ${ref.quote ? `<div><span class="font-semibold text-slate-800">■ 중요 인용문 / 메모:</span> <div class="p-3 bg-slate-100 rounded-lg text-slate-800 font-mono mt-1 whitespace-pre-wrap border border-slate-200">${escapeHtml(ref.quote)}</div></div>` : ''}
+        </div>
+      `;
+
+      document.getElementById("refDetailModal").classList.remove("hidden");
+      lucide.createIcons();
+    }
+
+    function closeRefDetailModal() {
+      document.getElementById("refDetailModal").classList.add("hidden");
+    }
+
+    /* =========================================================================
+       10. WRITING LOGS MODULE (Daily logs, Statistics & 7-Day Chart)
+       =========================================================================
+    */
+    function initWritingLogsModule() {
+      document.getElementById("openAddLogModalBtn").addEventListener("click", () => {
+        openWritingLogModal();
+      });
+
+      document.getElementById("writingLogForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        saveWritingLog();
+      });
+    }
+
+    function openWritingLogModal(logId = null) {
+      const modal = document.getElementById("writingLogModal");
+      const titleEl = document.getElementById("writingLogModalTitle");
+
+      if (logId && appData.writingLogs[logId]) {
+        titleEl.textContent = "작성 기록 수정";
+        const log = appData.writingLogs[logId];
+        document.getElementById("logId").value = logId;
+        document.getElementById("logDate").value = log.date || "";
+        document.getElementById("logChars").value = log.chars || 0;
+        document.getElementById("logHours").value = log.hours || 0;
+        document.getElementById("logChapterSection").value = log.chapterSection || "";
+        document.getElementById("logReadCount").value = log.readCount || 0;
+        document.getElementById("logDoneTasks").value = log.doneTasks || "";
+        document.getElementById("logChallenges").value = log.challenges || "";
+        document.getElementById("logNextPlan").value = log.nextPlan || "";
+        document.getElementById("logFreeMemo").value = log.freeMemo || "";
+      } else {
+        titleEl.textContent = "오늘 작성 기록 남기기";
+        document.getElementById("writingLogForm").reset();
+        document.getElementById("logId").value = "";
+        document.getElementById("logDate").value = new Date().toISOString().substring(0, 10);
+      }
+
+      modal.classList.remove("hidden");
+    }
+
+    function closeWritingLogModal() {
+      document.getElementById("writingLogModal").classList.add("hidden");
+    }
+
+    async function saveWritingLog() {
+      const logId = document.getElementById("logId").value || `log_${Date.now()}`;
+      
+      const newLog = {
+        id: logId,
+        date: document.getElementById("logDate").value,
+        chars: parseInt(document.getElementById("logChars").value) || 0,
+        hours: parseFloat(document.getElementById("logHours").value) || 0,
+        chapterSection: document.getElementById("logChapterSection").value.trim(),
+        readCount: parseInt(document.getElementById("logReadCount").value) || 0,
+        doneTasks: document.getElementById("logDoneTasks").value.trim(),
+        challenges: document.getElementById("logChallenges").value.trim(),
+        nextPlan: document.getElementById("logNextPlan").value.trim(),
+        freeMemo: document.getElementById("logFreeMemo").value.trim(),
+        createdAt: appData.writingLogs[logId]?.createdAt || new Date().toISOString()
+      };
+
+      if (!appData.writingLogs) appData.writingLogs = {};
+      appData.writingLogs[logId] = newLog;
+
+      await syncDataToDB("writingLogs", appData.writingLogs);
+      closeWritingLogModal();
+      renderWritingLogs();
+      showToast("작성 기록이 저장되었습니다.");
+    }
+
+    function deleteWritingLog(logId) {
+      confirmDialog("기록 삭제", "이 작성 기록을 삭제하시겠습니까?", async () => {
+        if (appData.writingLogs[logId]) {
+          delete appData.writingLogs[logId];
+          await syncDataToDB("writingLogs", appData.writingLogs);
+          renderWritingLogs();
+          showToast("삭제되었습니다.");
+        }
+      });
+    }
+
+    function calculateWritingStats() {
+      const logs = Object.values(appData.writingLogs || {});
+      const now = new Date();
+      const todayStr = now.toISOString().substring(0, 10);
+
+      // Current week calculations (Monday to Sunday)
+      const dayOfWeek = now.getDay() === 0 ? 6 : now.getDay() - 1; // 0 for Mon
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - dayOfWeek);
+      startOfWeek.setHours(0,0,0,0);
+
+      // Current month calculations
+      const currentYearMonth = todayStr.substring(0, 7);
+
+      let todayChars = 0;
+      let weekChars = 0;
+      let monthChars = 0;
+      let totalChars = 0;
+      let weekHours = 0;
+
+      logs.forEach(log => {
+        const c = log.chars || 0;
+        const h = log.hours || 0;
+        totalChars += c;
+
+        if (log.date === todayStr) {
+          todayChars += c;
+        }
+
+        if (log.date && log.date.substring(0, 7) === currentYearMonth) {
+          monthChars += c;
+        }
+
+        if (log.date) {
+          const logDate = new Date(log.date);
+          logDate.setHours(0,0,0,0);
+          if (logDate >= startOfWeek && logDate <= now) {
+            weekChars += c;
+            weekHours += h;
+          }
+        }
+      });
+
+      const weekAvg = Math.round(weekChars / 7);
+
+      return {
+        todayChars,
+        weekChars,
+        monthChars,
+        totalChars,
+        weekAvg,
+        weekHours
+      };
+    }
+
+    function renderWritingLogs() {
+      const stats = calculateWritingStats();
+
+      // Top Dashboard and Stats Sync
+      document.getElementById("statWeekChars").textContent = stats.weekChars.toLocaleString();
+      document.getElementById("statTotalChars").textContent = stats.totalChars.toLocaleString();
+
+      // Writing Logs view stats
+      document.getElementById("logStatTodayChars").textContent = `${stats.todayChars.toLocaleString()}자`;
+      document.getElementById("logStatWeekChars").textContent = `${stats.weekChars.toLocaleString()}자`;
+      document.getElementById("logStatMonthChars").textContent = `${stats.monthChars.toLocaleString()}자`;
+      document.getElementById("logStatTotalChars").textContent = `${stats.totalChars.toLocaleString()}자`;
+      document.getElementById("logStatWeekAvg").textContent = `${stats.weekAvg.toLocaleString()}자`;
+      document.getElementById("logStatWeekHours").textContent = `${stats.weekHours}시간`;
+
+      // Timeline List
+      const container = document.getElementById("writingLogsList");
+      const list = Object.values(appData.writingLogs || {}).sort((a,b) => new Date(b.date) - new Date(a.date));
+
+      if (list.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-12 bg-white border border-dashed border-slate-300 rounded-xl text-slate-500 text-xs">
+            <i data-lucide="edit-3" class="w-8 h-8 text-slate-300 mx-auto mb-2"></i>
+            <p class="font-bold text-slate-700">아직 등록된 작성 기록이 없습니다.</p>
+            <p class="text-slate-400 mt-1">매일 작성한 글자 수와 애로사항을 기록해보세요.</p>
+          </div>
+        `;
+        lucide.createIcons();
+        renderWritingCharts();
+        return;
+      }
+
+      container.innerHTML = list.map(log => {
+        return `
+          <div class="p-4 bg-slate-50/60 hover:bg-slate-50 border border-slate-200 rounded-xl space-y-2.5 transition">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-2">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-bold text-slate-900 bg-white px-2.5 py-1 rounded border border-slate-200">${escapeHtml(log.date)}</span>
+                <span class="text-xs text-slate-600">작성량: <strong class="text-slate-900 font-bold">${(log.chars || 0).toLocaleString()}자</strong></span>
+                <span class="text-xs text-slate-400">•</span>
+                <span class="text-xs text-slate-600">작업: <strong class="text-slate-900 font-bold">${log.hours || 0}시간</strong></span>
+                ${log.chapterSection ? `<span class="text-[11px] px-2 py-0.5 rounded bg-slate-200 text-slate-700">${escapeHtml(log.chapterSection)}</span>` : ''}
+              </div>
+
+              <div class="flex items-center gap-1.5 self-end sm:self-center">
+                <button onclick="openWritingLogModal('${log.id}')" class="p-1 text-slate-400 hover:text-slate-700 rounded"><i data-lucide="edit" class="w-3.5 h-3.5"></i></button>
+                <button onclick="deleteWritingLog('${log.id}')" class="p-1 text-slate-400 hover:text-rose-600 rounded"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+              </div>
+            </div>
+
+            <div class="text-xs space-y-1.5 text-slate-700">
+              <div><strong class="text-slate-900">■ 오늘 완료 작업:</strong> ${escapeHtml(log.doneTasks)}</div>
+              ${log.challenges ? `<div><strong class="text-slate-900">■ 애로사항:</strong> <span class="text-slate-600">${escapeHtml(log.challenges)}</span></div>` : ''}
+              ${log.nextPlan ? `<div><strong class="text-slate-900">■ 다음 계획:</strong> <span class="text-slate-600">${escapeHtml(log.nextPlan)}</span></div>` : ''}
+              ${log.freeMemo ? `<div class="text-[11px] text-slate-400 italic">메모: ${escapeHtml(log.freeMemo)}</div>` : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+      renderWritingCharts();
+    }
+
+    function get7DayWritingData() {
+      const labels = [];
+      const values = [];
+      const logs = Object.values(appData.writingLogs || {});
+
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().substring(0, 10);
+        const monthDay = `${d.getMonth() + 1}/${d.getDate()}`;
+        labels.push(monthDay);
+
+        const dayTotal = logs
+          .filter(l => l.date === dateStr)
+          .reduce((sum, l) => sum + (l.chars || 0), 0);
+        values.push(dayTotal);
+      }
+
+      return { labels, values };
+    }
+
+    function renderWritingCharts() {
+      const { labels, values } = get7DayWritingData();
+
+      // 1. Dashboard Chart
+      const ctxDash = document.getElementById("writingChart");
+      if (ctxDash) {
+        if (writingChartInstance) writingChartInstance.destroy();
+        writingChartInstance = new Chart(ctxDash, {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: '작성 글자 수',
+              data: values,
+              backgroundColor: '#0f172a',
+              borderRadius: 4,
+              maxBarThickness: 28
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                grid: { color: '#f1f5f9' },
+                ticks: { font: { size: 10 } }
+              },
+              x: {
+                grid: { display: false },
+                ticks: { font: { size: 10 } }
+              }
+            }
+          }
+        });
+      }
+
+      // 2. Writing Log Page Chart
+      renderWritingLogPageChart();
+    }
+
+    function renderWritingLogPageChart() {
+      const ctxPage = document.getElementById("writingLogPageChart");
+      if (!ctxPage) return;
+      const { labels, values } = get7DayWritingData();
+
+      if (writingLogChartInstance) writingLogChartInstance.destroy();
+      writingLogChartInstance = new Chart(ctxPage, {
+        type: 'line',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: '일별 글자 수',
+            data: values,
+            borderColor: '#0f172a',
+            backgroundColor: 'rgba(15, 23, 42, 0.05)',
+            borderWidth: 2,
+            tension: 0.2,
+            fill: true,
+            pointBackgroundColor: '#0f172a'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: '#f1f5f9' },
+              ticks: { font: { size: 10 } }
+            },
+            x: {
+              grid: { display: false },
+              ticks: { font: { size: 10 } }
+            }
+          }
+        }
+      });
+    }
+
+    /* =========================================================================
+       11. TASKS & MILESTONES MODULE
+       =========================================================================
+    */
+    function initTasksModule() {
+      document.getElementById("openAddTaskModalBtn").addEventListener("click", () => {
+        openTaskModal();
+      });
+
+      document.getElementById("taskForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        saveTask();
+      });
+
+      document.getElementById("openAddMilestoneModalBtn").addEventListener("click", () => {
+        openMilestoneModal();
+      });
+
+      document.getElementById("milestoneForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        saveMilestone();
+      });
+    }
+
+    function openTaskModal(taskId = null) {
+      updateChapterSelectDropdowns();
+      const modal = document.getElementById("taskModal");
+      const titleEl = document.getElementById("taskModalTitle");
+
+      if (taskId && appData.tasks[taskId]) {
+        titleEl.textContent = "할 일 수정";
+        const t = appData.tasks[taskId];
+        document.getElementById("taskId").value = taskId;
+        document.getElementById("taskTitle").value = t.title || "";
+        document.getElementById("taskDetail").value = t.detail || "";
+        document.getElementById("taskDueDate").value = t.dueDate || "";
+        document.getElementById("taskChapter").value = t.chapter || "";
+        document.getElementById("taskPriority").value = t.priority || "보통";
+        document.getElementById("taskStatus").value = t.status || "예정";
+      } else {
+        titleEl.textContent = "새 할 일 추가";
+        document.getElementById("taskForm").reset();
+        document.getElementById("taskId").value = "";
+        document.getElementById("taskPriority").value = "보통";
+        document.getElementById("taskStatus").value = "예정";
+      }
+
+      modal.classList.remove("hidden");
+    }
+
+    function closeTaskModal() {
+      document.getElementById("taskModal").classList.add("hidden");
+    }
+
+    async function saveTask() {
+      const taskId = document.getElementById("taskId").value || `task_${Date.now()}`;
+      
+      const newTask = {
+        id: taskId,
+        title: document.getElementById("taskTitle").value.trim(),
+        detail: document.getElementById("taskDetail").value.trim(),
+        dueDate: document.getElementById("taskDueDate").value,
+        chapter: document.getElementById("taskChapter").value,
+        priority: document.getElementById("taskPriority").value,
+        status: document.getElementById("taskStatus").value,
+        createdAt: appData.tasks[taskId]?.createdAt || new Date().toISOString()
+      };
+
+      if (!appData.tasks) appData.tasks = {};
+      appData.tasks[taskId] = newTask;
+
+      await syncDataToDB("tasks", appData.tasks);
+      closeTaskModal();
+      renderTasks();
+      showToast("할 일이 저장되었습니다.");
+    }
+
+    async function toggleTaskDone(taskId) {
+      if (appData.tasks[taskId]) {
+        appData.tasks[taskId].status = appData.tasks[taskId].status === "완료" ? "진행 중" : "완료";
+        await syncDataToDB("tasks", appData.tasks);
+        renderTasks();
+        showToast(appData.tasks[taskId].status === "완료" ? "할 일을 완료했습니다." : "미완료 상태로 변경되었습니다.");
+      }
+    }
+
+    function deleteTask(taskId) {
+      confirmDialog("할 일 삭제", "이 할 일을 삭제하시겠습니까?", async () => {
+        if (appData.tasks[taskId]) {
+          delete appData.tasks[taskId];
+          await syncDataToDB("tasks", appData.tasks);
+          renderTasks();
+          showToast("삭제되었습니다.");
+        }
+      });
+    }
+
+    function filterTasks(type) {
+      activeFilter = type;
+      document.querySelectorAll(".task-tab").forEach(tab => {
+        tab.classList.remove("bg-white", "text-slate-800", "shadow-2xs");
+        tab.classList.add("text-slate-600");
+      });
+      const targetBtn = document.getElementById(`taskFilter${type.charAt(0).toUpperCase() + type.slice(1)}`);
+      if (targetBtn) {
+        targetBtn.classList.add("bg-white", "text-slate-800", "shadow-2xs");
+        targetBtn.classList.remove("text-slate-600");
+      }
+      renderTasks();
+    }
+
+    function renderTasks() {
+      const container = document.getElementById("tasksListContainer");
+      const allTasks = Object.values(appData.tasks || {});
+      const todayStr = new Date().toISOString().substring(0, 10);
+
+      let list = allTasks;
+      if (activeFilter === "pending") list = list.filter(t => t.status !== "완료");
+      if (activeFilter === "done") list = list.filter(t => t.status === "완료");
+      if (activeFilter === "overdue") list = list.filter(t => t.status !== "완료" && t.dueDate && t.dueDate < todayStr);
+
+      list.sort((a,b) => new Date(a.dueDate || "9999-12-31") - new Date(b.dueDate || "9999-12-31"));
+
+      // Update stat cards
+      const doneCount = allTasks.filter(t => t.status === "완료").length;
+      document.getElementById("statTasksDone").textContent = doneCount;
+      document.getElementById("statTasksTotal").textContent = allTasks.length;
+
+      if (list.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-10 border border-dashed border-slate-200 rounded-xl text-slate-400 text-xs">
+            해당하는 할 일이 없습니다.
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = list.map(t => {
+        const isDone = t.status === "완료";
+        const isOverdue = !isDone && t.dueDate && t.dueDate < todayStr;
+
+        const priorityBadge = {
+          "높음": "text-rose-600 font-bold bg-rose-50 border-rose-200",
+          "보통": "text-slate-700 bg-slate-100 border-slate-200",
+          "낮음": "text-slate-500 bg-slate-50 border-slate-200"
+        }[t.priority] || "text-slate-700";
+
+        return `
+          <div class="p-3 bg-white border ${isOverdue ? 'border-rose-300 bg-rose-50/20' : 'border-slate-200'} rounded-lg flex items-center justify-between gap-3 shadow-2xs hover:border-slate-300 transition">
+            <div class="flex items-start gap-3 min-w-0">
+              <button onclick="toggleTaskDone('${t.id}')" class="mt-0.5 w-5 h-5 rounded border ${isDone ? 'bg-slate-900 border-slate-900 text-white' : 'border-slate-300 hover:border-slate-500 bg-white'} flex items-center justify-center transition shrink-0 cursor-pointer">
+                ${isDone ? `<i data-lucide="check" class="w-3.5 h-3.5"></i>` : ''}
+              </button>
+
+              <div class="min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="text-xs font-semibold ${isDone ? 'line-through text-slate-400' : 'text-slate-900'}">${escapeHtml(t.title)}</span>
+                  <span class="text-[10px] px-1.5 py-0.5 rounded border ${priorityBadge}">${t.priority}</span>
+                  ${t.chapter ? `<span class="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded">${escapeHtml(t.chapter)}</span>` : ''}
+                  ${isOverdue ? `<span class="text-[10px] px-2 py-0.5 rounded font-bold bg-rose-100 text-rose-700">기한 경과 (${escapeHtml(t.dueDate)})</span>` : ''}
+                </div>
+                ${t.detail ? `<p class="text-[11px] text-slate-500 mt-0.5 truncate">${escapeHtml(t.detail)}</p>` : ''}
+              </div>
+            </div>
+
+            <div class="flex items-center gap-2 shrink-0">
+              <span class="text-[11px] ${isOverdue ? 'text-rose-600 font-bold' : 'text-slate-400'}">${escapeHtml(t.dueDate)}</span>
+              <button onclick="openTaskModal('${t.id}')" class="p-1 text-slate-400 hover:text-slate-700 rounded"><i data-lucide="edit" class="w-3.5 h-3.5"></i></button>
+              <button onclick="deleteTask('${t.id}')" class="p-1 text-slate-400 hover:text-rose-600 rounded"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    // Milestones
+    function openMilestoneModal(milestoneId = null) {
+      const modal = document.getElementById("milestoneModal");
+      const titleEl = document.getElementById("milestoneModalTitle");
+
+      if (milestoneId && appData.milestones[milestoneId]) {
+        titleEl.textContent = "심사 및 제출 일정 수정";
+        const m = appData.milestones[milestoneId];
+        document.getElementById("milestoneId").value = milestoneId;
+        document.getElementById("milestoneTitle").value = m.title || "";
+        document.getElementById("milestoneDate").value = m.date || "";
+        document.getElementById("milestoneMemo").value = m.memo || "";
+        document.getElementById("milestoneCompleted").checked = !!m.completed;
+      } else {
+        titleEl.textContent = "논문 심사 및 제출 일정 추가";
+        document.getElementById("milestoneForm").reset();
+        document.getElementById("milestoneId").value = "";
+      }
+
+      modal.classList.remove("hidden");
+    }
+
+    function closeMilestoneModal() {
+      document.getElementById("milestoneModal").classList.add("hidden");
+    }
+
+    async function saveMilestone() {
+      const mId = document.getElementById("milestoneId").value || `ms_${Date.now()}`;
+      
+      const newM = {
+        id: mId,
+        title: document.getElementById("milestoneTitle").value.trim(),
+        date: document.getElementById("milestoneDate").value,
+        memo: document.getElementById("milestoneMemo").value.trim(),
+        completed: document.getElementById("milestoneCompleted").checked,
+        createdAt: appData.milestones[mId]?.createdAt || new Date().toISOString()
+      };
+
+      if (!appData.milestones) appData.milestones = {};
+      appData.milestones[mId] = newM;
+
+      await syncDataToDB("milestones", appData.milestones);
+      closeMilestoneModal();
+      renderMilestones();
+      showToast("일정이 저장되었습니다.");
+    }
+
+    function deleteMilestone(mId) {
+      confirmDialog("일정 삭제", "이 마일스톤 일정을 삭제하시겠습니까?", async () => {
+        if (appData.milestones[mId]) {
+          delete appData.milestones[mId];
+          await syncDataToDB("milestones", appData.milestones);
+          renderMilestones();
+          showToast("삭제되었습니다.");
+        }
+      });
+    }
+
+    function renderMilestones() {
+      const container = document.getElementById("milestonesContainer");
+      const list = Object.values(appData.milestones || {}).sort((a,b) => new Date(a.date || "9999-12-31") - new Date(b.date || "9999-12-31"));
+
+      if (list.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full text-center py-6 border border-dashed border-slate-200 rounded-lg text-slate-400 text-xs">
+            등록된 주요 심사 일정이 없습니다. (예: 연구계획서 제출, 예심, 본심, 최종 제출 등)
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = list.map(m => {
+        return `
+          <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-lg flex flex-col justify-between gap-2 shadow-2xs">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <span class="text-xs font-bold ${m.completed ? 'text-slate-400 line-through' : 'text-slate-900'}">${escapeHtml(m.title)}</span>
+                <span class="block text-[11px] font-semibold text-slate-600 mt-0.5"><i data-lucide="calendar" class="w-3 h-3 inline mr-1 text-slate-400"></i>${escapeHtml(m.date)}</span>
+              </div>
+              <div class="flex items-center gap-1">
+                <button onclick="openMilestoneModal('${m.id}')" class="p-1 text-slate-400 hover:text-slate-700"><i data-lucide="edit" class="w-3.5 h-3.5"></i></button>
+                <button onclick="deleteMilestone('${m.id}')" class="p-1 text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+              </div>
+            </div>
+            ${m.memo ? `<p class="text-[11px] text-slate-500 mt-1">${escapeHtml(m.memo)}</p>` : ''}
+          </div>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    /* =========================================================================
+       12. RESEARCH NOTES MODULE
+       =========================================================================
+    */
+    function initNotesModule() {
+      document.getElementById("openAddNoteModalBtn").addEventListener("click", () => {
+        openNoteModal();
+      });
+
+      document.getElementById("noteForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+        saveNote();
+      });
+    }
+
+    function openNoteModal(noteId = null) {
+      updateChapterSelectDropdowns();
+      const modal = document.getElementById("noteModal");
+      const titleEl = document.getElementById("noteModalTitle");
+
+      if (noteId && appData.notes[noteId]) {
+        titleEl.textContent = "연구 메모 수정";
+        const n = appData.notes[noteId];
+        document.getElementById("noteId").value = noteId;
+        document.getElementById("noteTitle").value = n.title || "";
+        document.getElementById("noteContent").value = n.content || "";
+        document.getElementById("noteChapter").value = n.chapter || "";
+        document.getElementById("noteTags").value = n.tags || "";
+      } else {
+        titleEl.textContent = "연구 메모 작성";
+        document.getElementById("noteForm").reset();
+        document.getElementById("noteId").value = "";
+      }
+
+      modal.classList.remove("hidden");
+    }
+
+    function closeNoteModal() {
+      document.getElementById("noteModal").classList.add("hidden");
+    }
+
+    async function saveNote() {
+      const noteId = document.getElementById("noteId").value || `note_${Date.now()}`;
+      
+      const newNote = {
+        id: noteId,
+        title: document.getElementById("noteTitle").value.trim(),
+        content: document.getElementById("noteContent").value.trim(),
+        chapter: document.getElementById("noteChapter").value,
+        tags: document.getElementById("noteTags").value.trim(),
+        date: new Date().toISOString().substring(0, 10),
+        createdAt: appData.notes[noteId]?.createdAt || new Date().toISOString()
+      };
+
+      if (!appData.notes) appData.notes = {};
+      appData.notes[noteId] = newNote;
+
+      await syncDataToDB("notes", appData.notes);
+      closeNoteModal();
+      renderNotes();
+      showToast("메모가 저장되었습니다.");
+    }
+
+    function deleteNote(noteId) {
+      confirmDialog("메모 삭제", "이 연구 메모를 삭제하시겠습니까?", async () => {
+        if (appData.notes[noteId]) {
+          delete appData.notes[noteId];
+          await syncDataToDB("notes", appData.notes);
+          renderNotes();
+          showToast("삭제되었습니다.");
+        }
+      });
+    }
+
+    function renderNotes() {
+      const container = document.getElementById("notesContainer");
+      const list = Object.values(appData.notes || {}).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+      if (list.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full text-center py-12 bg-white border border-dashed border-slate-300 rounded-xl text-slate-400 text-xs">
+            <i data-lucide="sticky-note" class="w-8 h-8 text-slate-300 mx-auto mb-2"></i>
+            <p class="font-bold text-slate-700">작성된 연구 메모가 없습니다.</p>
+            <p class="text-slate-400 mt-1">연구 아이디어 및 지도교수 피드백을 기록하세요.</p>
+          </div>
+        `;
+        lucide.createIcons();
+        return;
+      }
+
+      container.innerHTML = list.map(n => {
+        const tags = (n.tags || "").split(",").map(t => t.trim()).filter(Boolean);
+
+        return `
+          <div class="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex flex-col justify-between hover:border-slate-300 transition">
+            <div>
+              <div class="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
+                <span>${escapeHtml(n.date)}</span>
+                ${n.chapter ? `<span class="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">${escapeHtml(n.chapter)}</span>` : ''}
+              </div>
+              <h3 class="text-sm font-bold text-slate-900 leading-snug">${escapeHtml(n.title)}</h3>
+              <p class="text-xs text-slate-600 mt-2 whitespace-pre-wrap leading-relaxed">${escapeHtml(n.content)}</p>
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+              <div class="flex flex-wrap gap-1">
+                ${tags.map(t => `<span class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded">#${escapeHtml(t)}</span>`).join('')}
+              </div>
+              <div class="flex items-center gap-1">
+                <button onclick="openNoteModal('${n.id}')" class="p-1 text-slate-400 hover:text-slate-700"><i data-lucide="edit" class="w-3.5 h-3.5"></i></button>
+                <button onclick="deleteNote('${n.id}')" class="p-1 text-slate-400 hover:text-rose-600"><i data-lucide="trash-2" class="w-3.5 h-3.5"></i></button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    /* =========================================================================
+       13. DASHBOARD VIEW UPDATE
+       =========================================================================
+    */
+    function updateDashboardView() {
+      updateSubmissionCountdown();
+
+      // 1. 논문 장별 진행률
+      const dashChapContainer = document.getElementById("dashChapterList");
+      const chapList = Object.values(appData.chapters || {});
+
+      if (chapList.length === 0) {
+        dashChapContainer.innerHTML = `<p class="text-xs text-slate-400 py-3 text-center">등록된 논문 장이 없습니다.</p>`;
+      } else {
+        dashChapContainer.innerHTML = chapList.map(chap => {
+          const p = calculateChapterProgress(chap);
+          return `
+            <div>
+              <div class="flex items-center justify-between text-xs mb-1">
+                <span class="font-semibold text-slate-800">${escapeHtml(chap.title)}</span>
+                <span class="font-bold text-slate-900">${p}%</span>
+              </div>
+              <div class="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                <div class="bg-slate-800 h-2 rounded-full" style="width: ${p}%"></div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      // 2. 최근 작성 기록
+      const dashLogContainer = document.getElementById("dashRecentLogs");
+      const sortedLogs = Object.values(appData.writingLogs || {}).sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 3);
+
+      if (sortedLogs.length === 0) {
+        dashLogContainer.innerHTML = `<p class="text-slate-400 text-center py-2">최근 작성 로그가 없습니다.</p>`;
+      } else {
+        dashLogContainer.innerHTML = sortedLogs.map(l => `
+          <div class="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-200/60">
+            <div>
+              <span class="font-semibold text-slate-800">${escapeHtml(l.date)}</span>
+              <span class="text-slate-500 ml-1 truncate">(${escapeHtml(l.doneTasks)})</span>
+            </div>
+            <span class="font-bold text-slate-900 shrink-0 ml-2">${(l.chars || 0).toLocaleString()}자</span>
+          </div>
+        `).join('');
+      }
+
+      // 3. 최근 등록 문헌
+      const dashRefContainer = document.getElementById("dashRecentRefs");
+      const sortedRefs = Object.values(appData.references || {}).sort((a,b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)).slice(0, 4);
+
+      if (sortedRefs.length === 0) {
+        dashRefContainer.innerHTML = `<p class="text-xs text-slate-400 text-center py-3">최근 등록된 문헌이 없습니다.</p>`;
+      } else {
+        dashRefContainer.innerHTML = sortedRefs.map(r => `
+          <div class="p-2.5 bg-slate-50 hover:bg-slate-100/70 border border-slate-200/80 rounded-lg flex items-center justify-between gap-2 cursor-pointer transition" onclick="openRefDetailModal('${r.id}')">
+            <div class="min-w-0">
+              <span class="text-xs font-bold text-slate-800 truncate block">${escapeHtml(r.title)}</span>
+              <span class="text-[11px] text-slate-500">${escapeHtml(r.authors)} (${r.year})</span>
+            </div>
+            <span class="text-[10px] px-2 py-0.5 rounded bg-white text-slate-700 border border-slate-200 shrink-0 font-medium">${r.readStatus}</span>
+          </div>
+        `).join('');
+      }
+
+      // 4. 이번 주 할 일
+      const dashTasksContainer = document.getElementById("dashWeekTasks");
+      const weekTasks = Object.values(appData.tasks || {}).filter(t => t.status !== "완료").slice(0, 4);
+
+      if (weekTasks.length === 0) {
+        dashTasksContainer.innerHTML = `<p class="text-xs text-slate-400 text-center py-3">남은 할 일이 없습니다. (모두 완료!)</p>`;
+      } else {
+        dashTasksContainer.innerHTML = weekTasks.map(t => `
+          <div class="p-2.5 bg-slate-50 border border-slate-200/80 rounded-lg flex items-center justify-between gap-2 text-xs">
+            <span class="font-semibold text-slate-800 truncate">${escapeHtml(t.title)}</span>
+            <span class="text-[11px] text-slate-400 shrink-0">${escapeHtml(t.dueDate)}</span>
+          </div>
+        `).join('');
+      }
+
+      // 5. 마일스톤
+      const dashMsContainer = document.getElementById("dashMilestones");
+      const msList = Object.values(appData.milestones || {}).sort((a,b) => new Date(a.date || "9999-12-31") - new Date(b.date || "9999-12-31")).slice(0, 3);
+
+      if (msList.length === 0) {
+        dashMsContainer.innerHTML = `<p class="text-slate-400 text-center py-2">등록된 심사 일정이 없습니다.</p>`;
+      } else {
+        dashMsContainer.innerHTML = msList.map(m => `
+          <div class="flex items-center justify-between p-2 bg-slate-50 rounded border border-slate-200/60">
+            <span class="font-semibold text-slate-800">${escapeHtml(m.title)}</span>
+            <span class="text-slate-500 font-mono text-[11px]">${escapeHtml(m.date)}</span>
+          </div>
+        `).join('');
+      }
+
+      // 6. 최근 연구 메모
+      const dashNotesContainer = document.getElementById("dashRecentNotes");
+      const notesList = Object.values(appData.notes || {}).sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 3);
+
+      if (notesList.length === 0) {
+        dashNotesContainer.innerHTML = `<p class="text-slate-400 text-center py-2">작성된 메모가 없습니다.</p>`;
+      } else {
+        dashNotesContainer.innerHTML = notesList.map(n => `
+          <div class="p-2.5 bg-slate-50 rounded border border-slate-200/60">
+            <div class="font-bold text-slate-800 truncate">${escapeHtml(n.title)}</div>
+            <div class="text-[11px] text-slate-500 line-clamp-1 mt-0.5">${escapeHtml(n.content)}</div>
+          </div>
+        `).join('');
+      }
+
+      renderWritingCharts();
+      lucide.createIcons();
+    }
+
+    /* =========================================================================
+       14. UTILITIES & INITIALIZATION
+       =========================================================================
+    */
+    function escapeHtml(str) {
+      if (!str) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function renderAll() {
+      populateResearchPlanForm();
+      populateYearFilter();
+      updateChapterSelectDropdowns();
+      renderChapters();
+      renderReferences();
+      renderWritingLogs();
+      renderTasks();
+      renderMilestones();
+      renderNotes();
+      updateDashboardView();
+      lucide.createIcons();
+    }
+
+    // App Startup
+    window.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+      initAuth();
+      setupNavigation();
+      initResearchPlan();
+      initChaptersModule();
+      initReferencesModule();
+      initWritingLogsModule();
+      initTasksModule();
+      initNotesModule();
+    });
+  </script>
+</body>
+</html>
